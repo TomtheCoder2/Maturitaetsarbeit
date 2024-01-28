@@ -1,4 +1,10 @@
 # My Matura Project
 
-# Code
+### Code
 [here](/code)
+
+### Documentation
+[here](/documentation)
+
+### Notes
+[here](/notes)
