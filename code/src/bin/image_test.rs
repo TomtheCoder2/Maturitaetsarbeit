@@ -3,25 +3,50 @@ use image::io::Reader as ImageReader;
 use image::{GenericImageView, ImageBuffer, Rgba};
 use image::Pixel;
 
-fn main() {
-    match read_image() {
-        Ok(_) => println!("Image read successfully"),
-        Err(e) => println!("Error reading image: {}", e),
-    }
+struct Ball {
+    x: u32,
+    y: u32,
+    radius: f32,
 }
 
-fn read_image() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().collect();
-    // check first arg
-    let file_name = if args.len() < 2 {
-        println!("Usage: {} <image>", args[0]);
-        "frame2.jpg"
-        // return Ok(());
-    } else {
-        &args[1]
-    };
+fn main() {
+    // let args: Vec<String> = std::env::args().collect();
+    // // check first arg
+    // let file_name = if args.len() < 2 {
+    //     println!("Usage: {} <image>", args[0]);
+    //     "frame2.jpg".to_string()
+    //     // return Ok(());
+    // } else {
+    //     &args[1]
+    // };
+    // list all the files in a directory
+    let dir = std::fs::read_dir("frames").unwrap();
+    let out_dir = "output";
+    let mut all_balls = Vec::new();
+    let mut file_count = 0;
+    for file in dir {
+        let file_name = file.unwrap().path().to_str().unwrap().to_string();
+        println!("file: {}", file_name);
+        let balls = match read_image(file_name, out_dir.to_string()) {
+            Ok(b) => b,
+            Err(e) => {
+                panic!("Error reading image: {}", e);
+            }
+        };
+        all_balls.push(balls);
+        file_count += 1;
+    }
+    for balls in all_balls.iter() {
+        for ball in balls.iter() {
+            println!("{}", ball);
+        }
+    }
+    println!("found {} balls in {} files", all_balls.iter().map(|balls| balls.len()).sum::<usize>(), file_count);
+}
+
+fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn std::error::Error>> {
     let t1 = std::time::Instant::now();
-    let img = ImageReader::open(file_name)?.decode()?;
+    let img = ImageReader::open(file_name.clone())?.decode()?;
     const SCALING: u32 = 4;
     let new_width = img.width() / SCALING;
     let new_height = img.height() / SCALING;
@@ -109,11 +134,6 @@ fn read_image() -> Result<(), Box<dyn std::error::Error>> {
     balls_raw.retain(|ball| ball.count > 2);
     println!("Image processed in {:?}", t1.elapsed());
     // println!("balls: {:?}, len: {}", balls, balls.len());
-    struct Ball {
-        x: u32,
-        y: u32,
-        radius: f32,
-    }
     impl Display for Ball {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             write!(f, "Ball: ({}, {}), radius: {}", self.x, self.y, self.radius)
@@ -163,11 +183,13 @@ fn read_image() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("Image filtered in {} ms", t1.elapsed().as_millis());
     let t1 = std::time::Instant::now();
-    output.save("output.png")?;
+    let out_file = format!("{}/{}", out_dir, file_name.split("\\").last().unwrap());
+    println!("out_file: {}", out_file);
+    output.save(out_file)?;
     println!("Image saved in {} ms", t1.elapsed().as_millis());
     // print all the balls
     for ball in balls.iter() {
         println!("{}", ball);
     }
-    Ok(())
+    Ok(balls)
 }
