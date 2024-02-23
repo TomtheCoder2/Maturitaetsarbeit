@@ -8,5 +8,3 @@
 
 ### Notes
 [here](/notes)
-
-these are my changes from working copy
