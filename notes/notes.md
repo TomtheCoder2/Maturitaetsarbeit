@@ -11,3 +11,9 @@ high speed cameras
     * SVS Vistek: https://www.svs-vistek.com/en/industrial-cameras/svs-camera-detail.php?id=fxo421CCX12-2C
 
 
+pneumatic system:
+    * valves:
+        * https://www.festo.com/media/pim/636/D15000100122636.PDF
+        * 
+    * cylinder:
+        * https://www.festo.com/de/de/a/1376474/  
