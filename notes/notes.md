@@ -12,8 +12,7 @@ high speed cameras
 
 
 pneumatic system:
-    * valves:
-        * https://www.festo.com/media/pim/636/D15000100122636.PDF
-        * 
-    * cylinder:
-        * https://www.festo.com/de/de/a/1376474/  
+* valves:
+    * https://www.festo.com/media/pim/636/D15000100122636.PDF
+* cylinder:
+    * https://www.festo.com/de/de/a/1376474/  
