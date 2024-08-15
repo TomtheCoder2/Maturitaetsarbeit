@@ -1,16 +1,58 @@
 % Preamble
-\documentclass[11pt]{article}
+\documentclass[11pt]{report}
 
 % Packages
 \usepackage{amsmath}
+\usepackage{tikz}
+%\usepackage{amstex}
+\usetikzlibrary{calc}
+\usetikzlibrary{decorations.markings}
+\usetikzlibrary{decorations.pathmorphing,patterns}
+
+
+\tikzstyle directed=[postaction={decorate,decoration={markings, % arrows on the field lines
+mark=at position .1 with {\arrowreversed[scale=1.5]{stealth}},
+mark=at position .9 with {\arrowreversed[scale=1.5]{stealth}}}}]
+\tikzstyle tangent=[postaction={decorate,decoration={markings, % Tangent to the field line
+mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt,0)--(12pt,0)node[above]{$\vec{B}$};}}}]
+\tikzstyle fLines=[thick,dashed,directed,tangent]
 
 \title{Matura Project}
 \author{Jan Wilhelm}
 \date\today
 
+\newcommand{\mycancel}[2]{\overset{#1}{\cancel{#2}}}
+\renewcommand{\deg}[0]{\ensuremath{^\circ}}
+\newcommand{\abs}[1]{\left|#1\right|}
+
+\textheight=21cm
+\oddsidemargin=-1.5cm
+\textwidth=18.5cm
+%\voffset=-5.5cm
+
 % Document
 \begin{document}
-\maketitle
+    \maketitle
 
+    \tableofcontents
+    \newpage
+
+
+    \chapter{Introduction}\label{ch:introduction}
+    \input{introduction}
+
+    \chapter{Mechanics}\label{ch:mechanics}
+
+
+    \section{Frame}\label{sec:frame}
+
+
+    \chapter{Electronics}\label{ch:electronics}
+
+
+    \chapter{Software}\label{ch:software}
+
+
+    \chapter{Construction}\label{ch:construction}
 
 \end{document}

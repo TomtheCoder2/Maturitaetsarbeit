@@ -9,16 +9,25 @@ struct Ball {
     radius: f32,
 }
 
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            println!($($arg)*);
+        }
+    }
+}
+
 fn main() {
     // let args: Vec<String> = std::env::args().collect();
     // // check first arg
     // let file_name = if args.len() < 2 {
-    //     println!("Usage: {} <image>", args[0]);
+    //     debug!("Usage: {} <image>", args[0]);
     //     "frame2.jpg".to_string()
     //     // return Ok(());
     // } else {
     //     &args[1]
     // };
+    let t1 = std::time::Instant::now();
     // list all the files in a directory
     let dir = std::fs::read_dir("frames").unwrap();
     let out_dir = "output";
@@ -26,7 +35,7 @@ fn main() {
     let mut file_count = 0;
     for file in dir {
         let file_name = file.unwrap().path().to_str().unwrap().to_string();
-        println!("file: {}", file_name);
+        debug!("file: {}", file_name);
         let balls = match read_image(file_name, out_dir.to_string()) {
             Ok(b) => b,
             Err(e) => {
@@ -38,10 +47,11 @@ fn main() {
     }
     for balls in all_balls.iter() {
         for ball in balls.iter() {
-            println!("{}", ball);
+            debug!("{}", ball);
         }
     }
     println!("found {} balls in {} files", all_balls.iter().map(|balls| balls.len()).sum::<usize>(), file_count);
+    println!("Total time: {:?}", t1.elapsed());
 }
 
 fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn std::error::Error>> {
@@ -68,26 +78,27 @@ fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn s
     // let mut new_output = ImageBuffer::new(img.width() / SCALING + 1, img.height() / SCALING + 1);
     let mut balls_raw: Vec<BallRaw> = Vec::new();
     // let pixels = img.pixels().collect::<Vec<_>>();
-    println!("Image read in {} ms", t1.elapsed().as_millis());
-    println!("Image dimensions: {:?}", img.dimensions());
+    debug!("Image read in {} ms", t1.elapsed().as_millis());
+    debug!("Image dimensions: {:?}", img.dimensions());
     let t1 = std::time::Instant::now();
     let mut counter = 0;
-    // println!("pixels: {}", img.pixels().count());
+    // debug!("pixels: {}", img.pixels().count());
     for (_i, pixel) in img.pixels().enumerate() {
         if counter == SCALING - 1 {
             // let pixel = pixels[i];
-            // println!("pixel: {:?}", pixel);
+            // debug!("pixel: {:?}", pixel);
             let rgb = pixel.2.channels();
             let (r, g, b, a) = (rgb[0], rgb[1], rgb[2], rgb[3]);
             let x = pixel.0 / SCALING;
             let y = pixel.1 / SCALING;
-            // filter out the not yellow pixels
-            if r as i32 + g as i32 > 250 && r > 100 && g > 100 && b < 100 {
+            // keep the yellow pixels
+            if r as i32 + g as i32 > 230 && r > 100 && g > 100 && b < 100 {
+                output.put_pixel(x * SCALING, y * SCALING, Rgba([r, g, b, a / 2]));
                 // output.put_pixel(x, y, Rgba([r, g, b, a]));
-                // go through all balls, check if the pixel is close to any of them (within 1 pixels)
+                // go through all balls, check if the pixel is close to any of them (within 2 pixels)
                 let mut found = false;
                 for ball in balls_raw.iter_mut() {
-                    const MAX_DISTANCE: u32 = 1;
+                    const MAX_DISTANCE: u32 = 2;
                     if x as i32 >= ball.min_x as i32 - MAX_DISTANCE as i32 &&
                         x <= ball.max_x + MAX_DISTANCE &&
                         y as i32 >= ball.min_y as i32 - MAX_DISTANCE as i32 &&
@@ -132,20 +143,20 @@ fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn s
     }
     // filter out the balls that are too small
     balls_raw.retain(|ball| ball.count > 2);
-    println!("Image processed in {:?}", t1.elapsed());
-    // println!("balls: {:?}, len: {}", balls, balls.len());
+    debug!("Image processed in {:?}", t1.elapsed());
+    // debug!("balls: {:?}, len: {}", balls, balls.len());
     impl Display for Ball {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             write!(f, "Ball: ({}, {}), radius: {}", self.x, self.y, self.radius)
         }
     }
     let mut balls = Vec::new();
-    for (i, pixel) in img.pixels().enumerate() {
+    for (_i, pixel) in img.pixels().enumerate() {
         let rgb = pixel.2.channels();
         let (r, g, b, a) = (rgb[0], rgb[1], rgb[2], rgb[3]);
         let x = pixel.0;
         let y = pixel.1;
-        output.put_pixel(x, y, Rgba([r, g, b, a / 2]));
+        // output.put_pixel(x, y, Rgba([r, g, b, a / 2]));
     }
     // crate lines with the centers of the balls that are between 25% and 75% of the image
     for ball in balls_raw.iter() {
@@ -173,7 +184,7 @@ fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn s
                 let y = ((y * SCALING) as f32 + radius * SCALING as f32 * (i as f32).to_radians().sin()) as u32;
                 output.put_pixel(x, y, Rgba([255, 0, 0, 255]));
             }
-            println!("center: ({}, {}) normal coords: ({}, {})", x, y, x * SCALING, y * SCALING);
+            debug!("center: ({}, {}) normal coords: ({}, {})", x, y, x * SCALING, y * SCALING);
             balls.push(Ball {
                 x: x * SCALING,
                 y: y * SCALING,
@@ -181,15 +192,15 @@ fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn s
             });
         }
     }
-    println!("Image filtered in {} ms", t1.elapsed().as_millis());
+    debug!("Image filtered in {} ms", t1.elapsed().as_millis());
     let t1 = std::time::Instant::now();
     let out_file = format!("{}/{}", out_dir, file_name.split("\\").last().unwrap());
-    println!("out_file: {}", out_file);
+    debug!("out_file: {}", out_file);
     output.save(out_file)?;
-    println!("Image saved in {} ms", t1.elapsed().as_millis());
+    debug!("Image saved in {} ms", t1.elapsed().as_millis());
     // print all the balls
     for ball in balls.iter() {
-        println!("{}", ball);
+        debug!("{}", ball);
     }
     Ok(balls)
 }
