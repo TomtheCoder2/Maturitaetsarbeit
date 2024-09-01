@@ -6,6 +6,16 @@ edition = "2021"
 [dependencies]
 image = "0.24.8"
 imageproc = "0.23.0"
+#cameleon = { version = "0.1.10", features = ["libusb"] }
+#cameleon = { git = "https://github.com/cameleon-rs/cameleon/", branch = "fix-clippy-1.79", features = ["libusb"] }
+cameleon = { path = "./cameleon/cameleon", features = ["libusb"] }
+
+egui = { version = "0.27.2" }
+eframe = { version = "0.27.2", default-features = false, features = [
+    "default_fonts", # Embed the default egui fonts.
+    "glow", # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence", # Enable restoring app state when restarting the app.
+] }
 
 [profile.release]
 debug = 1

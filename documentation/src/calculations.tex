@@ -1,14 +1,27 @@
-\subsection{Motors}\label{subsec:motors}
+\section{Objective}\label{sec:objective}
 
-\subsubsection{Objectives}\label{subsubsec:objectives}
-We want to be to stop a ball with a velocity of maximum $7m/s$.
+The primary objective of this project is to build a machine that can effectively compete with a human in foosball.
+More specifically, the machine should be able to:
 
-\subsubsection{Calculations for the moving motor}\label{subsubsec:moving_motor}
-The distance from the attacker to the goal is 0.4m.
-That means we have stop the ball in
+\begin{itemize}
+    \item Defend against balls traveling at speeds of up to $7m/s$.
+    This is approximately the speed achieved by normal players when they try to shoot fast.
+    \item Shoot the ball back with a speed of $7m/s$.
+    \item Achieve a positional precision of $0.1mm$, which is circa the accuracy of normal stepper motors (including the mechanics to move the players).
+\end{itemize}
+
+
+\section{Motors}\label{sec:motors}
+
+\subsection{Objectives}\label{subsec:objectives}
+We want to be able to defend a ball with a velocity of maximum $v=7m/s$.
+
+\subsection{Calculations for the moving motor}\label{subsec:moving_motor}
+The distance from the attacker to the goal is $s=0.4m$.
+That means we have stop the ball in time t, where
 \begin{equation}
     \label{eq:stopping_time}
-    t = \frac{s}{v} = \frac{0.4m}{7m/s} = 0.057s
+    t = \frac{s}{v} = \frac{0.4m}{7m/s} = 0.057s.
 \end{equation}
 Which is not a lot of time to process the image and move the motors.
 The goalkeeper has to travel a maximum distance of 0.2m in 0.057s, that means we have an average velocity of
@@ -17,36 +30,48 @@ The goalkeeper has to travel a maximum distance of 0.2m in 0.057s, that means we
     v = \frac{s}{t} = \frac{0.2m}{0.057s} = 3.5m/s
 \end{equation}
 Which means we need a top speed of at least $2\cdot3.5m/s=7m/s$, as the motors have to accelerate and decelerate.
-We also need to be able to move the motors in 0.057s, which means we need a maximum acceleration of
+We also need to be able to move the motors in 0.057s, which means we need a maximum acceleration $a$ of
 \begin{equation}
     \label{eq:acceleration}
-    a = \frac{v}{t} = \frac{7m/s}{0.057s} = 122.8m/s^2
+    a = \frac{v}{t} = \frac{7m/s}{0.057s} = 122.8m/s^2.
 \end{equation}
-We assume that the weight of the tubes is $\sim 0.1kg$.
+We assume that the weight of the tubes is $m \approx 0.1kg$.
 The torque needed to move the tubes is
 \begin{equation}
     \label{eq:torque}
     \tau = F \cdot r = m \cdot a \cdot r = 0.1kg \cdot 122.8m/s^2 \cdot 0.083m \approx 1Nm
 \end{equation}
-assuming the radius of the gear is 8.3m.
-And the required top RPM is
+assuming the radius of the gear is 8.3cm.
+And the required top rational speed (measured in rotations per minute $\text{RPM}$) is
 \begin{equation}
     \label{eq:top_rpm}
-    \text{RPM} = \frac{v}{2\pi r} \cdot 60 = \frac{7m/s}{2\pi \cdot 0.083m} \cdot 60 \approx 800\text{RPM}
+    \frac{v}{2\pi r} \cdot 60 = \frac{7m/s}{2\pi \cdot 0.083m} \cdot 60 \approx 800\text{RPM}.
 \end{equation}
 A Motor that fits those requirements is the \textbf{PD42-3-1141} from \textbf{Trinamic}.
 
-\subsubsection{Calculations for the rotating motor}\label{subsubsec:rotating_motor}
-The ball has a mass of 17g.
-We assume that we have an angle of 45\deg  to accelerate the ball.
+\subsection{Calculations for the rotating motor}\label{subsec:rotating_motor}
+The ball has a mass $m=17g$.
+We assume that we have an angle of $45\deg$ ($=\frac{\pi}{4}$ in radians) to accelerate the ball.
 \\
 \begin{center}
+
+    \tikzset{
+        testpic/.pic={
+            \node at (0.05,-0.35) {\includegraphics[height=3.2cm] {../photos/foosball_player}};
+        },
+        testpic2/.pic={
+            \node at (0.05,-0.35) {\includegraphics[height=3.2cm] {../photos/foosball_player}};
+        },
+    }
+
     \begin{tikzpicture}
-        \def \r {2}
+        \def \r {2cm}
         \def \rsmall {0.5}
         \def \angle {45}
+        \pic[rotate=45/2,transform shape] at (0,0) {testpic};
+        \pic[rotate=-45/2,transform shape] at (0,0) {testpic2};
         \draw (0,0) -- ({-sin(\angle / 2)*\r}, {-cos(\angle / 2)*\r});
-        \draw (0,0) -- ({sin(\angle / 2)*\r}, {-cos(\angle / 2)*\r}) node[right, midway] {$r=70mm$};
+        \draw (0,0) -- ({sin(\angle / 2)*\r}, {-cos(\angle / 2)*\r}) node[right, midway] {$r=70\text{mm}$};
         \draw ({-sin(\angle / 2)*\rsmall}, {-cos(\angle / 2)*\rsmall}) arc(270-\angle/2:270+\angle/2:\rsmall) node[midway,below] {$45\deg$};
         \draw[->] ({-sin(\angle / 2)*\r}, {-cos(\angle / 2)*\r}) arc(270-\angle/2:270+\angle/2:\r) node[midway,below] {$a$};
 %        \draw () circle (\r);
@@ -73,18 +98,20 @@ For the motor that just rotates the figure we can use a DC motor with gears and 
 % Pololu 10:1 Metal Gearmotor 37Dx65L mm 12V with 64 CPR Encoder (Helical Pinion) 4758
 A motor that fits those requirements is the \textbf{Pololu 10:1 Metal Gearmotor 37Dx65L mm 12V with 64 CPR Encoder (Helical Pinion) 4758}.
 
-\subsection{Camera}\label{subsec:camera}
 
-\subsubsection{Optics}\label{subsubsec:lens}
+\section{Camera}\label{sec:camera}
 
+\subsection{Optics}\label{subsec:lens}
+To achieve our goal of defending against balls at speed of up to $7m/s$, we need a camera that can capture the entire table at a framerate of at least 200fps.
+A sensor that achieves this is the \textbf{IMX287 CMOS} sensor from \textbf{Sony}.
+This sensor has a width of $4.98\text{mm}$
 \paragraph{Lens Equation}\label{par:lens_equation}
 
 The relationship between the object width (FoV), sensor width, and distance to the object is given by:
 \begin{equation}
     \text{Object Width (FoV)} = \text{Sensor Width} \times \frac{\text{Distance to Object (d)}}{\text{Focal Length (f)}}\label{eq:lens_equation}
 \end{equation}
-In our case that is:
-(We change the height of the table from 600mm to 800mm, so that the focal length doesn't have to be too small)
+In our case, we change the height of the table from 600mm to 800mm, so that the focal length doesn't have to be too small:
 \begin{equation}
     \label{eq:object_width_general}
     \text{Object Width (FoV)} = 4.8\text{mm} \times \frac{800\text{mm}}{3.6\text{mm}} = 1066.6\text{mm}
