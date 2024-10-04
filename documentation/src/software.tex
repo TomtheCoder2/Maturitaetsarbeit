@@ -1,4 +1,4 @@
-\section{General}
+\section{General}\label{sec:general}
 The software has the task to gather the image information from the camera, detecting the ball, predicting where it will go in the future and controlling the motors to either stop or shoot the ball.
 This task can be split into the following chapters:
 \begin{itemize}
@@ -8,12 +8,217 @@ This task can be split into the following chapters:
     \item \textbf{Controlling the motors}: Finally, we move the motors to the correct position
 \end{itemize}
 
-\section{Optics}
+
+\section{Optics}\label{sec:optics}
 The goal here is to correct for lens distortion, this can be achieved by first capturing many images containing a checkerboard pattern with known gird size, in this is case 8x8.
-One such image in my case looks like this:\begin{figure}[H]
+One such image in my case looks like this:
+\begin{figure}[H]
     \centering
     \includegraphics[height=5cm]{../photos/calibration_image}
     \caption[calimage]{Calibration image}
     \label{fig:calibration_image}
 \end{figure}
 As one can see there is severe distortion in the image, this can be corrected by using the OpenCV library.
+
+% todo: should i explain in detail how opencv does it?
+
+Using the undistort function provided by opencv is not fast enough for our needs, because we only have 3ms to do the whole image processing and motor controlling.
+So I wrote a custom function that generates a table where the index for each pixel in the new image is stored, so the function doesnt have to calculate the pixel coordinate for the undistorted image each time when the function is called.
+The rust function to get the coordinates $x_{\text{original}},y_{\text{original}}$ of a pixel at $x_{\text{undistorted}},y_{\text{undistorted}}$ in the distorted (original) image looks like this:
+
+
+
+\begin{lstlisting}[language=rust,breaklines,label={lst:distort_coords}]
+/// Calculate the distorted coordinates given undistorted image coordinates.
+fn distort_coords(x: f64, y: f64, fx: f64, fy: f64, cx: f64, cy: f64) -> (f64, f64) {
+    // Distortion coefficients
+    let k1 = DIST_COEFFS[0];
+    let k2 = DIST_COEFFS[1];
+    let p1 = DIST_COEFFS[2];
+    let p2 = DIST_COEFFS[3];
+    let k3 = DIST_COEFFS[4];
+
+    // Normalize coordinates to [-1, 1]
+    let x_normalized = (x - cx) / fx;
+    let y_normalized = (y - cy) / fy;
+
+    // Calculate radial distance
+    let r2 = x_normalized * x_normalized + y_normalized * y_normalized;
+    let r4 = r2 * r2;
+
+    // Apply radial distortion
+    let radial_distortion = 1.0 + k1 * r2 + k2 * r4 + k3 * r4 * r2;
+    let x_radial = x_normalized * radial_distortion;
+    let y_radial = y_normalized * radial_distortion;
+
+    // Apply tangential distortion
+    let x_tangential =
+        2.0 * p1 * x_normalized * y_normalized + p2 * (r2 + 2.0 * x_normalized * x_normalized);
+    let y_tangential =
+        p1 * (r2 + 2.0 * y_normalized * y_normalized) + 2.0 * p2 * x_normalized * y_normalized;
+
+    // Distorted coordinates
+    let x_distorted = x_radial + x_tangential;
+    let y_distorted = y_radial + y_tangential;
+
+    // Map back to pixel coordinates
+    let distorted_x = fx * x_distorted + cx;
+    let distorted_y = fy * y_distorted + cy;
+
+    (distorted_x, distorted_y)
+}
+\end{lstlisting}
+Where \texttt{DIST\_COEFFS} are the distortion coefficients calculated by the OpenCV calibration function.
+To generate the table I used the following code:
+\begin{lstlisting}[language=rust,breaklines,label={lst:gen_table}]
+/// Generate precomputation table for undistortion.
+pub fn gen_table(
+    original_width: u32, original_height: u32,
+    new_width: u32, new_height: u32,
+    x_offset: i32, y_offset: i32,
+) -> Vec<i32> {
+    // Camera matrix values
+    let fx = CAMERA_MATRIX[0][0];
+    let fy = CAMERA_MATRIX[1][1];
+    let cx = CAMERA_MATRIX[0][2];
+    let cy = CAMERA_MATRIX[1][2];
+    let mut precomputation_table = vec![];
+
+    for y in 0..new_height {
+        for x in 0..new_width {
+            let x = x as i32 + x_offset;
+            let y = y as i32 + y_offset;
+            // Map the pixel back to the distorted image coordinates
+            let (distorted_x, distorted_y) = distort_coords(x as f64, y as f64, fx, fy, cx, cy);
+
+            let distorted_x = distorted_x.round() as i32;
+            let distorted_y = distorted_y.round() as i32;
+
+            // If the coordinates are within the bounds of the original image, map the pixel
+            let index = if distorted_x >= 0
+                && distorted_x < original_width as i32
+                && distorted_y >= 0
+                && distorted_y < original_height as i32
+            {
+                let index = ((distorted_y * original_width as i32 + distorted_x) * 3) as usize;
+                index as i32
+            } else {
+                -1 // black pixel (outside the image bounds)
+            };
+            precomputation_table.push(index);
+        }
+    }
+    precomputation_table
+}
+\end{lstlisting}
+This generates a long vector with the corresponding index for each pixel in the undistorted image.
+(Note that these are indices because the image is flattened to a vector of length $3 \cdot \text{width} \cdot \text{height}$, where each pixel has 3 values for the RGB channels.)
+
+Using the table is as simple as just looking up the index for the pixel in the undistorted image and copying the pixel values from the original image to the new image.
+This function is called for each frame and the result is a corrected image with no distortion.
+The Code can be seen here:
+\begin{lstlisting}[language=rust,breaklines,label={lst:undistort_image_table}]
+/// Undistort an image using the precomputed table.
+pub fn undistort_image_table(
+    img: &[u8],
+    undistorted_img: &mut [u8],
+    table: &Vec<i32>,
+    new_width: u32,
+    new_height: u32,
+) {
+    // Assert that the image has the correct size
+    assert_eq!(
+        undistorted_img.len(),
+        3 * new_width as usize * new_height as usize
+    );
+
+    for i in 0..new_height * new_width {
+        let index = table[i as usize];
+
+        if index != -1 {
+            #[inline]
+            /// Helper function to avoid code duplication
+            fn set_pixel(undistorted_img: &mut [u8], img: &[u8], pixel_index: usize, i: usize) {
+                undistorted_img[i as usize] = img[pixel_index];
+            }
+            let pixel_index = index as usize;
+            set_pixel(undistorted_img, img, pixel_index, i as usize * 3);
+            set_pixel(undistorted_img, img, pixel_index + 1, i as usize * 3 + 1);
+            set_pixel(undistorted_img, img, pixel_index + 2, i as usize * 3 + 2);
+        }
+    }
+}
+\end{lstlisting}
+The parameters for this function are a bit special because one argument is the final vector where the undistorted image is stored, the other is the original image, and the last one is the table that was generated before.
+Giving the final image buffer as a parameter saves time, because the image buffer can be reused in each frame, saving the time to reallocate the buffer each frame.
+\\
+An illustration can be seen in this example rainbow image being given to the undistort function:
+% todo: pick a better example image
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=.8\textwidth]{../photos/original_rainbow}
+        \caption[originalRainbow]{Original rainbow image}
+        \label{fig:original_rainbow}
+    \end{subfigure}%
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=.8\textwidth]{../photos/undistorted_rainbow}
+        \caption[originalRainbow]{Undistorted rainbow image}
+        \label{fig:undistorted_rainbow}
+    \end{subfigure}
+    \caption{Undistorted rainbow image}
+    \label{fig:original_undistorted_rainbow}
+\end{figure}
+The undistorted image\ref{fig:undistorted_rainbow} is larger than the original rainbow image\ref{fig:original_rainbow}, that is because some pixel are moved out of the original image bounds because the camera can see \"further\" at the corners than at the sides.
+This effect can also be seen in some example footage of the table:
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=.8\textwidth]{../photos/original_example8}
+        \caption[originalRainbow]{Original image}
+        \label{fig:original_example8}
+    \end{subfigure}%
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=.8\textwidth]{../photos/output8}
+        \caption[originalRainbow]{Undistorted image}
+        \label{fig:undistorted_example8}
+    \end{subfigure}
+    \caption{Undistorted example image}
+    \label{fig:original_undistorted_example}
+\end{figure}
+Therefore we have to crop the image at the sides by a different amount, I made a simple graphical user interface (GUI) to adjust the cropping values.
+The GUI can be seen here:
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../photos/margin_adj_gui}
+    \caption[marginadjgui]{Margin Adjustment GUI}
+    \label{fig:margin_adj_gui}
+\end{figure}
+The GUI is also written in rust using the egui\autocite{egui} library.
+The cropped example image looks like this:
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../photos/example8_cropped}
+    \caption[croppedexampleimage]{Cropped example image}
+    \label{fig:example8_cropped}
+\end{figure}
+
+\section{Ball Detection}\label{sec:ball-detection}
+
+
+
+\section{Prediction}\label{sec:prediction}
+
+
+\section{Controlling the motors}\label{sec:controlling-the-motors}
+To control the motors I use an Arduino Mega 2560, because it has enough pins to control all the motors at once.
+The Arduino is connected to the computer via USB, and the computer sends the motor positions to the Arduino via serial communication.
+\subsubsection{Controlling the DC-Motor}\label{subsubsec:controlling-the-dc-motor}
+The DC-Motor is controlled by the stepper motor driver L298N as seen here\ref{ch:electronics}.
+
+
+

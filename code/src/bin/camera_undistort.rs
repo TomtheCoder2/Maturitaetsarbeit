@@ -143,7 +143,7 @@ fn main() {
     let camera_matrix = CAMERA_MATRIX;
     let dist_coeffs = DIST_COEFFS;
     let new_camera_matrix = Matrix3::new(1000.0, 0.0, 640.0, 0.0, 1000.0, 360.0, 0.0, 0.0, 1.0);
-    let number = 9;
+    let number = 8;
     let mut img = image::open(format!("input_images/input_image{}.png", number))
         .expect("Failed to open image");
     let img = img.to_rgb8();

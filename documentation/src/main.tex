@@ -1,16 +1,80 @@
 % Preamble
 \documentclass[11pt]{report}
+\usepackage[a4paper, total={6in, 8in},headsep=1cm]{geometry}
 
 % Packages
 \usepackage{amsmath}
 \usepackage{tikz}
 %\usepackage{amstex}
 \usetikzlibrary{calc}
+\usepackage{fancyheadings}
 \usetikzlibrary{decorations.markings}
 \usetikzlibrary{decorations.pathmorphing,patterns}
 \usepackage{transparent}
 \usepackage{graphicx}
 \usepackage{float}
+\usepackage{subcaption}
+\usepackage [autostyle, english = american]{csquotes}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks,
+    linkcolor={blue!50!black},
+    citecolor={blue!50!black},
+    urlcolor={blue!80!black}
+}
+\usepackage[backend=bibtex, urldate=long, sorting=none, defernumbers=true,autocite=superscript]{biblatex}
+
+% rust formatting
+\usepackage{color}
+\usepackage{listings}
+\definecolor{GrayCodeBlock}{RGB}{241,241,241}
+\definecolor{BlackText}{RGB}{110,107,94}
+\definecolor{RedTypename}{RGB}{182,86,17}
+\definecolor{GreenString}{RGB}{96,172,57}
+\definecolor{PurpleKeyword}{RGB}{184,84,212}
+\definecolor{GrayComment}{RGB}{170,170,170}
+\definecolor{GoldDocumentation}{RGB}{180,165,45}
+\lstdefinelanguage{rust}
+{
+    columns=fullflexible,
+    keepspaces=true,
+    frame=single,
+    framesep=0pt,
+    framerule=0pt,
+    framexleftmargin=4pt,
+    framexrightmargin=4pt,
+    framextopmargin=5pt,
+    framexbottommargin=3pt,
+    xleftmargin=4pt,
+    xrightmargin=4pt,
+    numbers=left, % display line numbers on the left
+    backgroundcolor=\color{GrayCodeBlock},
+    basicstyle=\ttfamily\color{BlackText},
+    keywords={
+        true,false,
+        unsafe,async,await,move,
+        use,pub,crate,super,self,mod,
+        struct,enum,fn,const,static,let,mut,ref,type,impl,dyn,trait,where,as,
+        break,continue,if,else,while,for,loop,match,return,yield,in
+    },
+    keywordstyle=\color{PurpleKeyword},
+    ndkeywords={
+        bool,u8,u16,u32,u64,u128,i8,i16,i32,i64,i128,char,str,
+        Self,Option,Some,None,Result,Ok,Err,String,Box,Vec,Rc,Arc,Cell,RefCell,HashMap,BTreeMap,
+        macro_rules
+    },
+    ndkeywordstyle=\color{RedTypename},
+    comment=[l][\color{GrayComment}\slshape]{//},
+    morecomment=[s][\color{GrayComment}\slshape]{/*}{*/},
+    morecomment=[l][\color{GoldDocumentation}\slshape]{///},
+    morecomment=[s][\color{GoldDocumentation}\slshape]{/*!}{*/},
+    morecomment=[l][\color{GoldDocumentation}\slshape]{//!},
+    morecomment=[s][\color{RedTypename}]{\#![}{]},
+    morecomment=[s][\color{RedTypename}]{\#[}{]},
+    stringstyle=\color{GreenString},
+    string=[b]"
+}
+
 
 
 
@@ -29,13 +93,34 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 \renewcommand{\deg}[0]{\ensuremath{^\circ}}
 \newcommand{\abs}[1]{\left|#1\right|}
 
-\textheight=21cm
 \oddsidemargin=-1.5cm
-\textwidth=18.5cm
-%\voffset=-5.5cm
+\voffset=-1.7cm
+\textheight=26cm
+\textwidth=19cm
+
+
+
+\thispagestyle{fancy}
+
+\fancyhf{} % clear all fields
+\newcommand{\footl}{Matura Project}
+
+\fancypagestyle{plain}{%
+    \fancyhf{}
+    \fancyhead[L]{\rule[-2ex]{0pt}{2ex}\small Matura Project}
+    \fancyhead[R]{\small Jan Wilhelm 6e}
+    \fancyfoot[L]{\small \footl}
+    \fancyfoot[C]{-- \thepage\ --}
+    \fancyfoot[R]{\small \date{\today}}
+    \renewcommand{\headrulewidth}{0.2pt}
+    \renewcommand{\footrulewidth}{0.2pt}}
+\pagestyle{plain}
+
+
 
 % Document
 \begin{document}
+    % todo: main questions: We/I or unpersonal?
     \maketitle
 
     \tableofcontents
@@ -76,6 +161,8 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \section{Acknowledgements}\label{sec:acknowledgements}
 
     \section{References}\label{sec:references}
+    \bibliographystyle{plain}
+    \bibliography{sources}
 
     \section{Appendix}\label{sec:appendix}
 
