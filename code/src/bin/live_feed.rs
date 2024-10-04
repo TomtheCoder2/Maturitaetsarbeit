@@ -1,15 +1,80 @@
-use std::sync::Mutex;
+use std::fmt::format;
+use std::path::Path;
+use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Mutex};
 use std::thread;
+use std::time::Instant;
 
-use cameleon::Camera;
+use cameleon::genapi::NodeStore;
 use cameleon::u3v::{ControlHandle, StreamHandle};
+use cameleon::Camera;
 use eframe::Frame;
-use egui::{ColorImage, TextureHandle};
 use egui::Context;
-use image::ImageBuffer;
+use egui::{ColorImage, TextureHandle};
+use matura::increment_last_number_in_filename;
 
+use crate::Command::*;
+use egui::Color32;
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, RgbImage};
+use matura::undistort_image;
+use serde::{Deserialize, Serialize};
+use std::sync::atomic::Ordering;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Command {
+    Exposure(f64),
+    Start,
+    Stop,
+    Pause,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
     file_name: String,
+    #[serde(skip)]
+    pub sender: Sender<Command>,
+    exposure: f64,
+    auto_exposure: bool,
+    calibration_mode: bool,
+    #[serde(skip)]
+    last_cal_image: Instant,
+    calibration_interval: f64,
+    paused: bool,
+    #[serde(skip)]
+    recorded_images: Vec<ColorImage>,
+    #[serde(skip)]
+    recording: bool,
+    #[serde(skip)]
+    raw_image: ColorImage,
+    show_original: bool,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        let (sender, _) = mpsc::channel();
+        App {
+            file_name: "my_image.png".to_owned(),
+            sender,
+            exposure: 0.0,
+            auto_exposure: true,
+            calibration_mode: false,
+            last_cal_image: Instant::now(),
+            calibration_interval: 0.5,
+            paused: false,
+            recorded_images: Vec::new(),
+            recording: false,
+            // read the image from ./raw.png
+            raw_image: {
+                let image = image::open("./raw.png").expect("Failed to open image");
+                let rgb8_data = image.to_rgb8().into_raw();
+                let width = image.width() as usize;
+                let height = image.height() as usize;
+                create_color_image_from_rgb8(&rgb8_data, width, height)
+            },
+            show_original: false,
+        }
+    }
 }
 
 fn load_texture_from_image(ctx: &Context, image: ColorImage) -> TextureHandle {
@@ -24,57 +89,309 @@ fn create_color_image_from_rgb8(rgb8_data: &[u8], width: usize, height: usize) -
         pixels.push(chunk[0]); // R
         pixels.push(chunk[1]); // G
         pixels.push(chunk[2]); // B
-        pixels.push(255);      // A (set alpha to 255 for full opacity)
+        pixels.push(255); // A (set alpha to 255 for full opacity)
     }
 
     ColorImage::from_rgba_unmultiplied([width, height], &pixels)
 }
 
 static IMAGE_BUFFER: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+static IMAGE_BUFFER_UNDISTORTED: Mutex<(u32, u32, Vec<u8>)> = Mutex::new((0, 0, Vec::new()));
+static FPS: Mutex<f64> = Mutex::new(0.0);
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
-        egui::CentralPanel::default().show(ctx, |ui|
-        {
-            let buffer = IMAGE_BUFFER.lock().unwrap();
+        egui::CentralPanel::default().show(ctx, |ui| {
+            // println!("Loading image...");
+            let buffer = match IMAGE_BUFFER.lock() {
+                Ok(buffer) => buffer.clone(),
+                Err(_) => {
+                    ui.label("No image data available");
+                    ui.label(format!("FPS: {:>5.0}", 1. / (*FPS.lock().unwrap())));
+                    return;
+                }
+            };
+            let buffer_undistorted = match IMAGE_BUFFER_UNDISTORTED.try_lock() {
+                Ok(buffer) => buffer.clone(),
+                Err(_) => {
+                    ui.label("No image data available");
+                    return;
+                }
+            };
+            // println!(
+            // "Image loaded: {}x{}",
+            // buffer_undistorted.0, buffer_undistorted.1
+            // );
+            if buffer.is_empty() || buffer_undistorted.2.is_empty() {
+                ui.label("No image data available");
+                return;
+            }
             let width = 728;
             let height = 544;
-            let image = buffer.as_slice();
-            let image = create_color_image_from_rgb8(image, width, height);
-            let texture = load_texture_from_image(ctx, image.clone());
-            ui.text_edit_singleline(&mut self.file_name);
-            if ui.button("Save Image").clicked() {
-                let mut file = std::fs::File::create(&self.file_name).unwrap();
-                // write image to file
-                let mut image_buffer = ImageBuffer::new(width as u32, height as u32);
+            let image = buffer_undistorted.2.as_slice();
+
+            let mut image = DynamicImage::ImageRgb8(
+                ImageBuffer::from_raw(buffer_undistorted.0, buffer_undistorted.1, image.to_vec())
+                    .unwrap(),
+            );
+            // subract self.raw_image from image
+            // let raw_image = &self.raw_image;
+            // for x in 0..raw_image.width() {
+            //     for y in 0..raw_image.height() {
+            //         let raw_pixel = raw_image.pixels[y * raw_image.width() + x];
+            //         let image_pixel = image.get_pixel(x as u32, y as u32);
+            //         let r = image_pixel[0] as i32 - raw_pixel[0] as i32;
+            //         let g = image_pixel[1] as i32 - raw_pixel[1] as i32;
+            //         let b = image_pixel[2] as i32 - raw_pixel[2] as i32;
+            //         // image.put_pixel(
+            //         // x as u32,
+            //         // y as u32,
+            //         // image::Rgba([
+            //         // (r.max(0) as u8).min(255),
+            //         // (g.max(0) as u8).min(255),
+            //         // (b.max(0) as u8).min(255),
+            //         // 255,
+            //         // ]),
+            //         // );
+            //     }
+            // }
+            // dbg!();
+
+            let new_height = 700;
+            let new_width =
+                (image.width() as f32 / image.height() as f32 * new_height as f32) as u32;
+            let mut image =
+                image.resize(new_width, new_height, image::imageops::FilterType::Nearest);
+            let original_image = DynamicImage::ImageRgb8(
+                ImageBuffer::from_raw(width, height, buffer.to_vec()).unwrap(),
+            );
+            // let original_image =
+            // original_image.resize(width, height, image::imageops::FilterType::Nearest);
+            let height = image.height();
+            let width = image.width();
+            if self.paused {
+                // draw 2 black bars on top (as pause symbol)
                 for x in 0..width {
                     for y in 0..height {
-                        let pixel = image.pixels[y * width + x].clone();
-                        image_buffer.put_pixel(x as u32, y as u32, image::Rgba::from([pixel.r(), pixel.g(), pixel.b(), pixel.a()]));
+                        if y < height / 10 || y > height / 10 * 9 {
+                            image.put_pixel(x, y, image::Rgba([255, 0, 0, 0]));
+                        }
+                    }
+                    // make grayscale
+                    // let gray = (pixel.2[0] as f32 * 0.3
+                    //     + pixel.2[1] as f32 * 0.59
+                    //     + pixel.2[2] as f32 * 0.11) as u8;
+                    // pixel.2 = image::Rgba([255, 255, 255, gray]);
+                }
+            }
+            let image = ColorImage::from_rgb(
+                [image.width() as usize, image.height() as usize],
+                image.as_bytes(),
+            );
+            let undistorted_texture = load_texture_from_image(ctx, image.clone());
+            let original_texture = load_texture_from_image(
+                ctx,
+                ColorImage::from_rgb(
+                    [
+                        original_image.width() as usize,
+                        original_image.height() as usize,
+                    ],
+                    original_image.as_bytes(),
+                ),
+            );
+            if self.recording {
+                self.recorded_images.push(image.clone());
+            }
+
+            if self.auto_exposure {
+                // caluclate average brightness
+                let mut brightness = 0.0;
+                for i in 0..image.pixels.len() {
+                    let pixel = image.pixels[i];
+                    brightness += pixel.r() as f64 + pixel.g() as f64 + pixel.b() as f64;
+                }
+                brightness /= image.pixels.len() as f64;
+                let target_brightness = 0.5 * 255.0 * 3.0;
+                println!(
+                    "brightness: {}, target_brightness: {}",
+                    brightness, target_brightness
+                );
+                let diff = target_brightness - brightness;
+                let adjujustment_factor = 0.05;
+                self.exposure += diff * adjujustment_factor;
+                self.sender.send(Command::Exposure(self.exposure)).unwrap();
+            }
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut self.file_name);
+                if ui.button("Save Image").clicked()
+                    || ui.input(|ui| ui.key_pressed(egui::Key::Enter))
+                    || (self.calibration_mode
+                        && Instant::now()
+                            .duration_since(self.last_cal_image)
+                            .as_secs_f64()
+                            > self.calibration_interval)
+                {
+                    let mut file = std::fs::File::create(&self.file_name).unwrap();
+                    let width = original_image.width() as usize;
+                    let height = original_image.height() as usize;
+                    // write image to file
+                    let mut image_buffer = ImageBuffer::new(width as u32, height as u32);
+                    for x in 0..width as usize {
+                        for y in 0..height as usize {
+                            let pixel = original_image.get_pixel(x as u32, y as u32);
+                            image_buffer.put_pixel(
+                                x as u32,
+                                y as u32,
+                                image::Rgba::from([pixel[0], pixel[1], pixel[2], 255]),
+                            );
+                        }
+                    }
+                    image_buffer
+                        .save(if !self.file_name.clone().ends_with("png") {
+                            self.file_name.clone() + ".png"
+                        } else {
+                            self.file_name.clone()
+                        })
+                        .expect("Could not save image");
+                    if self.calibration_mode {
+                        self.file_name = increment_last_number_in_filename(&self.file_name)
+                            .expect("Could not increment last number in filename");
+                        self.last_cal_image = Instant::now();
                     }
                 }
-                image_buffer.save(self.file_name.clone());
-            }
-            ui.image(&texture);
+            });
+            ui.horizontal(|ui| {
+                ui.label("Exposure: ");
+                if ui
+                    .add(egui::DragValue::new(&mut self.exposure).speed(0.01))
+                    .clicked()
+                    || ui.button("Set Exposure").clicked()
+                {
+                    self.sender.send(Command::Exposure(self.exposure)).unwrap();
+                }
+                ui.checkbox(&mut self.show_original, "Show original Image");
+                ui.checkbox(&mut self.auto_exposure, "Auto Exposure");
+                ui.checkbox(&mut self.calibration_mode, "Calibration Mode");
+                if self.calibration_mode {
+                    ui.label("Calibration Image Interval: ");
+                    ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
+                }
+                if ui
+                    .button(format!("{}", if self.paused { "Play" } else { "Pause" }))
+                    .clicked()
+                    || ui.input(|ui| ui.key_pressed(egui::Key::Space))
+                {
+                    self.paused = !self.paused;
+                    self.sender
+                        .send(if self.paused {
+                            Command::Pause
+                        } else {
+                            Command::Start
+                        })
+                        .unwrap();
+                }
+                if ui
+                    .button(format!(
+                        "{}",
+                        if self.recording { "Stop" } else { "Record" }
+                    ))
+                    .clicked()
+                    || ui.input(|ui| ui.key_pressed(egui::Key::R))
+                {
+                    self.recording = !self.recording;
+                    // turn of calibration mod
+                    if self.recording {
+                        self.calibration_mode = false;
+                    }
+                    // if recording is stopped save images to file
+                    if !self.recording {
+                        let mut prefix = format!(
+                            "./recording_{}/",
+                            chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                        );
+                        std::fs::create_dir_all(&prefix).unwrap();
+                        for (i, image) in self.recorded_images.iter().enumerate() {
+                            let mut file_name = prefix.clone();
+                            file_name.push_str(&format!("{:04}.png", i));
+                            let mut file = std::fs::File::create(&file_name).unwrap();
+                            // write image to file
+                            let mut image_buffer = ImageBuffer::new(width as u32, height as u32);
+                            for x in 0..width as usize {
+                                for y in 0..height as usize {
+                                    let pixel = image.pixels[y * width as usize + x].clone();
+                                    image_buffer.put_pixel(
+                                        x as u32,
+                                        y as u32,
+                                        image::Rgba::from([
+                                            pixel.r(),
+                                            pixel.g(),
+                                            pixel.b(),
+                                            pixel.a(),
+                                        ]),
+                                    );
+                                }
+                            }
+                            image_buffer.save(file_name).expect("Could not save image");
+                        }
+                        println!(
+                            "Recording saved to {}, saved {} images",
+                            prefix,
+                            self.recorded_images.len()
+                        );
+                        self.recorded_images.clear();
+                    }
+                }
+            });
+            // ui.image(&texture);
+            ui.horizontal(|ui| {
+                if self.show_original {
+                    ui.add(
+                        egui::Image::new(&original_texture), // .max_width(200.0).rounding(10.0)
+                    );
+                }
+                ui.add(
+                    egui::Image::new(&undistorted_texture), // .max_width(200.0).rounding(10.0)
+                );
+            });
+            ui.label(format!("FPS: {:>5.0}", 1. / (*FPS.lock().unwrap())));
         });
         ctx.request_repaint();
+    }
+
+    /// Called by the frame work to save state before shutdown.
+    /// On Windows its saved here: C:\Users\UserName\AppData\Roaming\Phoenix\data\app.ron
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        // self.version = VERSION.to_string();
+        eframe::set_value(storage, eframe::APP_KEY, self);
     }
 }
 
 impl App {
-    pub fn new() -> Self {
-        App {
-            file_name: "image.png".to_string(),
+    pub fn new(tx: Sender<Command>, cc: &eframe::CreationContext<'_>) -> Self {
+        let mut app = App::default();
+        if let Some(storage) = cc.storage {
+            app = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        };
+        app.sender = tx;
+        // send current exposure to camera
+        app.sender.send(Command::Exposure(app.exposure)).unwrap();
+        if app.paused {
+            app.sender.send(Command::Pause).unwrap();
+        } else {
+            app.sender.send(Command::Start).unwrap();
         }
+        app
     }
 }
 
-pub fn run_camera_test() {
+pub fn run_camera_test(tx: Sender<Command>) {
+    println!("Starting Camera Test GUI");
     eframe::run_native(
         "Camera Test",
         Default::default(),
-        Box::new(|cc| Box::new(App::new())),
-    ).expect("Failed to run Camera Test");
+        Box::new(|cc| Box::new(App::new(tx, cc))),
+    )
+    .expect("Failed to run Camera Test");
 }
 
 fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String) {
@@ -87,7 +404,8 @@ fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String) {
     let exposure = params_ctxt
         .node(&*name)
         .unwrap()
-        .as_enumeration(&params_ctxt).unwrap();
+        .as_enumeration(&params_ctxt)
+        .unwrap();
     println!("{:?}", exposure);
 
     // Get the current value of `Gain`.
@@ -155,29 +473,98 @@ fn main() {
     // Loads `GenApi` context. This is necessary for streaming.
     camera.load_context().unwrap();
 
+    // let mut params_ctxt = camera.params_ctxt().unwrap();
+    // params_ctxt.node_store().visit_nodes(|f|
+    //         // IntSwissKnife(IntSwissKnifeNode { attr_base: NodeAttributeBase { id: NodeId(2247), name_space: Custom, merge_priority: Mid, expose_static: None }, elem_base: NodeElementBase { tooltip: None, description: None, display_name: None, visibility: Beginner, docu_url: None, is_deprecated: false, event_id: None, p_is_implemented: None, p_is_available: None, p_is_locked: None, p_block_polling: None, imposed_access_mode: RW, p_errors: [], p_alias: None, p_cast_alias: None, p_invalidators: [] }, streamable: false, p_variables: [NamedValue { name: "CORRECTIONSELECTORINDEX", value: NodeId(1365) }], constants: [], expressions: [], formula: Formula { expr: BinOp { kind: Mul, lhs: BinOp { kind: Add, lhs: Integer(386), rhs: Ident("CORRECTIONSELECTORINDEX") }, rhs: Integer(4) } }, unit: None, representation: PureNumber })
+    //         match f {
+    //             Node::IntSwissKnife(node) => {
+    //                 println!("{:#?}", node);
+    //             }
+    //             _ => {}
+    //         });
+    // println!("{:?}\n", f));
     set_value(&mut camera, "ExposureTime".to_string(), 1. * 1e6 / 30.0);
     // set_value(&mut camera, "AcquisitionFrameRate".to_string(), 300.0);
     // get_value(&mut camera, "DeviceLinkThroughputLimitMode".to_string());
 
-
     // Start streaming. Channel capacity is set to 3.
-    let payload_rx = camera.start_streaming(3).unwrap();
+    let mut payload_rx = camera.start_streaming(3).unwrap();
+    let (tx, rx): (Sender<Command>, Receiver<Command>) = mpsc::channel();
 
     thread::spawn(move || {
         let mut t0 = std::time::Instant::now();
+        let mut t0_delta = std::time::Instant::now();
         let mut frame_counter = 0;
+        let mut last_fps = [0.0; 100];
+        let mut paused = false;
+
+        // undistort image
+        let width = 728;
+        let height = 544;
+        let left_margin = 100;
+        let right_margin = 100;
+        let top_margin = 0;
+        let bottom_margin = 28;
+        let min_x = -left_margin;
+        let max_x = width as i32 + right_margin;
+        let min_y = -top_margin;
+        let max_y = height as i32 + bottom_margin;
+        let new_width = (max_x - min_x) as u32;
+        let new_height = (max_y - min_y) as u32;
+        println!("old width: {}, old height: {}", width, height);
+        println!("new width: {}, new height: {}", new_width, new_height);
+        let precompute = matura::gen_table(width, height, new_width, new_height, min_x, min_y);
+
+        let mut buffer = IMAGE_BUFFER_UNDISTORTED.lock().unwrap();
+        buffer.0 = new_width;
+        buffer.1 = new_height;
+        drop(buffer);
+
+        let mut undistorted_image = vec![0u8; (new_width * new_height * 3) as usize];
+
         loop {
-            frame_counter += 1;
-            if frame_counter % 1000 == 0 {
-                // show rolling fps average
-                let elapsed = t0.elapsed();
-                let fps = frame_counter as f64 / elapsed.as_secs_f64();
-                println!("fps: {:.2}", fps);
+            if let Ok(message) = rx.try_recv() {
+                match message {
+                    Exposure(value) => {
+                        set_value(&mut camera, "ExposureTime".to_string(), value);
+                    }
+                    Start => {
+                        paused = false;
+                    }
+                    Pause => {
+                        paused = true;
+                    }
+                    Stop => {
+                        break;
+                    }
+                    _ => {
+                        println!("Unknown command: {:?}", message);
+                    }
+                }
             }
+            if paused {
+                continue;
+            }
+            frame_counter += 1;
+            // show rolling fps average
+            let elapsed = t0.elapsed();
+            let fps = frame_counter as f64 / elapsed.as_secs_f64();
+            let delta = t0_delta.elapsed();
+            t0_delta = std::time::Instant::now();
+            if frame_counter % 1000 == 0 {
+                // println!("avg fps: {:.2}", fps);
+            }
+            // let fps = 1.0 / delta.as_secs_f64()
+            let fps = delta.as_secs_f64();
+            last_fps[(frame_counter % last_fps.len()) as usize] = fps;
+            *FPS.lock().unwrap() = last_fps.iter().sum::<f64>() / last_fps.len() as f64;
             let payload = match payload_rx.recv_blocking() {
                 Ok(payload) => payload,
                 Err(e) => {
-                    println!("payload receive error: {e}");
+                    println!(
+                        "[{}]Payload receive error: {e}",
+                        chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                    );
                     continue;
                 }
             };
@@ -193,14 +580,36 @@ fn main() {
 
                 let image = payload.image();
                 if let Some(image) = image {
-                    // save to IMAGE_BUFFER
-                    let mut buffer = IMAGE_BUFFER.lock().unwrap();
-                    buffer.clear();
-                    buffer.extend_from_slice(image);
+                    // let old_height = height;
+                    // let height = 700;
+                    // let width = (width as f32 / old_height as f32 * height as f32) as u32;
+                    // println!("Width: {}, Height: {}", width, height);
+                    // let undistorted_image =
+                    // undistort_image(&image, 30, width as u32, height as u32);
+                    // buffer.2.clear();
+                    // buffer.2.extend_from_slice(&undistorted_image);
+                    matura::undistort_image_table(
+                        image,
+                        &mut undistorted_image,
+                        &precompute,
+                        new_width,
+                        new_height,
+                    );
+                    if frame_counter % 10 == 0 {
+                        // save to IMAGE_BUFFER
+                        let mut buffer = IMAGE_BUFFER.lock().unwrap();
+                        buffer.clear();
+                        buffer.extend_from_slice(image);
+                        drop(buffer);
+
+                        let mut buffer = IMAGE_BUFFER_UNDISTORTED.lock().unwrap();
+                        buffer.2.clear();
+                        buffer.2.extend_from_slice(&undistorted_image);
+                    }
                 }
             }
         }
     });
 
-    run_camera_test();
+    run_camera_test(tx);
 }

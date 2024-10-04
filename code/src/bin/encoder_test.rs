@@ -1,4 +1,3 @@
-
 /// Truth table for the encoder
 /// check(false, false, false, true, -1);
 /// check(false, false, true, false, 1);
@@ -13,18 +12,26 @@ fn test(last_a: bool, last_b: bool, a: bool, b: bool) -> i32 {
         panic!("No change: test({}, {}, {}, {})", last_a, last_b, a, b);
     }
     if last_a != a && last_b != b {
-        panic!("Both a and b changed: test({}, {}, {}, {})", last_a, last_b, a, b);
+        panic!(
+            "Both a and b changed: test({}, {}, {}, {})",
+            last_a, last_b, a, b
+        );
     }
     let mut position = 0;
     // deltas for a and b
     // println!("delta_a: {}, delta_b: {}", delta_a, delta_b);
     // the four a cases
     if (a as i32 - last_a as i32) == 0 {
-        position += 1 * if a { 1 } else { -1 } * if (b as i32 - last_b as i32) == 1 { 1 } else { -1 };
+        position += 1
+            * if a { 1 } else { -1 }
+            * if (b as i32 - last_b as i32) == 1 {
+                1
+            } else {
+                -1
+            };
     } else {
         position -= 1 * if b { 1 } else { -1 } * (a as i32 - last_a as i32);
     }
-
 
     // println!("a: {} -> {}\nb: {} -> {}\nposition: {}\n", last_a, a, last_b, b, position);
     println!("check({}, {}, {}, {}, {});", last_a, last_b, a, b, position);
@@ -32,13 +39,24 @@ fn test(last_a: bool, last_b: bool, a: bool, b: bool) -> i32 {
     return position;
 }
 
-
 fn check(last_a: bool, last_b: bool, a: bool, b: bool, target: i32) {
-    println!("assert_eq!(test({}, {}, {}, {}), {});", last_a, last_b, a, b, target);
+    println!(
+        "assert_eq!(test({}, {}, {}, {}), {});",
+        last_a, last_b, a, b, target
+    );
     if test(last_a, last_b, a, b) == target {
         println!("Test passed");
     } else {
-        panic!("Test failed: check({}, {}, {}, {}, {}). got {} instead of {}", last_a, last_b, a, b, target, test(last_a, last_b, a, b), target);
+        panic!(
+            "Test failed: check({}, {}, {}, {}, {}). got {} instead of {}",
+            last_a,
+            last_b,
+            a,
+            b,
+            target,
+            test(last_a, last_b, a, b),
+            target
+        );
     }
 }
 

@@ -1,0 +1,26 @@
+\documentclass[11pt]{report}
+\usepackage{graphics}
+\usepackage{graphicx}
+
+
+\textheight=21cm
+\oddsidemargin=-2.5cm
+\textwidth=18.5cm
+
+\begin{document}
+    \setlength{\fboxsep}{0pt}%
+    \setlength{\fboxrule}{1pt}%
+
+    \begin{table}[]
+        \begin{tabular}{ll}
+            0 \fbox{\includegraphics[width=10cm]{../images/datamatrix_0}}
+            &  1  \fbox{\includegraphics[width=10cm]{../images/datamatrix_1}} \\
+            &                                                       \\
+             2\fbox{\includegraphics[width=10cm]{../images/datamatrix_2}}
+            & 3  \fbox{\includegraphics[width=10cm]{../images/datamatrix_3}}
+
+        \end{tabular}
+    \end{table}
+
+
+\end{document}

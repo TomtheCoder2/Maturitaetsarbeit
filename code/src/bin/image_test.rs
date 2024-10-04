@@ -1,7 +1,7 @@
-use std::fmt::{Display, Formatter};
 use image::io::Reader as ImageReader;
-use image::{GenericImageView, ImageBuffer, Rgba};
 use image::Pixel;
+use image::{GenericImageView, ImageBuffer, Rgba};
+use std::fmt::{Display, Formatter};
 
 struct Ball {
     x: u32,
@@ -50,7 +50,11 @@ fn main() {
             debug!("{}", ball);
         }
     }
-    println!("found {} balls in {} files", all_balls.iter().map(|balls| balls.len()).sum::<usize>(), file_count);
+    println!(
+        "found {} balls in {} files",
+        all_balls.iter().map(|balls| balls.len()).sum::<usize>(),
+        file_count
+    );
     println!("Total time: {:?}", t1.elapsed());
 }
 
@@ -99,10 +103,11 @@ fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn s
                 let mut found = false;
                 for ball in balls_raw.iter_mut() {
                     const MAX_DISTANCE: u32 = 2;
-                    if x as i32 >= ball.min_x as i32 - MAX_DISTANCE as i32 &&
-                        x <= ball.max_x + MAX_DISTANCE &&
-                        y as i32 >= ball.min_y as i32 - MAX_DISTANCE as i32 &&
-                        y <= ball.max_y + MAX_DISTANCE {
+                    if x as i32 >= ball.min_x as i32 - MAX_DISTANCE as i32
+                        && x <= ball.max_x + MAX_DISTANCE
+                        && y as i32 >= ball.min_y as i32 - MAX_DISTANCE as i32
+                        && y <= ball.max_y + MAX_DISTANCE
+                    {
                         ball.sum_x += x as u64;
                         ball.sum_y += y as u64;
                         ball.count += 1;
@@ -162,9 +167,16 @@ fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn s
     for ball in balls_raw.iter() {
         let x = (ball.sum_x / ball.count) as u32;
         let y = (ball.sum_y / ball.count) as u32;
-        if x > new_width / 3 && x < new_width * 3 / 4 && y > new_height / 3 && y < new_height * 3 / 4 {
+        if x > new_width / 3
+            && x < new_width * 3 / 4
+            && y > new_height / 3
+            && y < new_height * 3 / 4
+        {
             // todo: check if this is even right
-            let radius = (((ball.max_x - ball.min_x).pow(2) + (ball.max_y - ball.min_y).pow(2)) as f32).sqrt() / 2.0;
+            let radius = (((ball.max_x - ball.min_x).pow(2) + (ball.max_y - ball.min_y).pow(2))
+                as f32)
+                .sqrt()
+                / 2.0;
             for i in 0..output.width() {
                 // dont show the lines at radius*2
                 if (i as i32 - (x * SCALING) as i32).abs() < (radius * SCALING as f32) as i32 * 3 {
@@ -180,11 +192,21 @@ fn read_image(file_name: String, out_dir: String) -> Result<Vec<Ball>, Box<dyn s
             }
             // make a circle around the ball
             for i in 0..360 {
-                let x = ((x * SCALING) as f32 + radius * SCALING as f32 * (i as f32).to_radians().cos()) as u32;
-                let y = ((y * SCALING) as f32 + radius * SCALING as f32 * (i as f32).to_radians().sin()) as u32;
+                let x = ((x * SCALING) as f32
+                    + radius * SCALING as f32 * (i as f32).to_radians().cos())
+                    as u32;
+                let y = ((y * SCALING) as f32
+                    + radius * SCALING as f32 * (i as f32).to_radians().sin())
+                    as u32;
                 output.put_pixel(x, y, Rgba([255, 0, 0, 255]));
             }
-            debug!("center: ({}, {}) normal coords: ({}, {})", x, y, x * SCALING, y * SCALING);
+            debug!(
+                "center: ({}, {}) normal coords: ({}, {})",
+                x,
+                y,
+                x * SCALING,
+                y * SCALING
+            );
             balls.push(Ball {
                 x: x * SCALING,
                 y: y * SCALING,

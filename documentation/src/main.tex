@@ -8,6 +8,10 @@
 \usetikzlibrary{calc}
 \usetikzlibrary{decorations.markings}
 \usetikzlibrary{decorations.pathmorphing,patterns}
+\usepackage{transparent}
+\usepackage{graphicx}
+\usepackage{float}
+
 
 
 \tikzstyle directed=[postaction={decorate,decoration={markings, % arrows on the field lines
@@ -45,6 +49,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \input{calculations}
 
     \chapter{Mechanics}\label{ch:mechanics}
+    \input{mechanics}
 
 
     \section{Frame}\label{sec:frame}
@@ -54,7 +59,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 
     \chapter{Software}\label{ch:software}
-
+    \input{software}
 
     \chapter{Construction}\label{ch:construction}
 
