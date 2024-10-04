@@ -143,19 +143,22 @@ fn main() {
     let camera_matrix = CAMERA_MATRIX;
     let dist_coeffs = DIST_COEFFS;
     let new_camera_matrix = Matrix3::new(1000.0, 0.0, 640.0, 0.0, 1000.0, 360.0, 0.0, 0.0, 1.0);
-    let number = 7;
+    let number = 9;
     let mut img = image::open(format!("input_images/input_image{}.png", number))
         .expect("Failed to open image");
     let img = img.to_rgb8();
 
-    let width = img.width();
-    let height = img.height();
-    let side_margin = 70i32;
-    let top_margin = 10i32;
-    let min_x = -side_margin;
-    let max_x = width as i32 + side_margin;
+    // undistort image
+    let width = 728;
+    let height = 544;
+    let left_margin = 100;
+    let right_margin = 100;
+    let top_margin = 0;
+    let bottom_margin = 28;
+    let min_x = -left_margin;
+    let max_x = width as i32 + right_margin;
     let min_y = -top_margin;
-    let max_y = height as i32 + top_margin;
+    let max_y = height as i32 + bottom_margin;
     let new_width = (max_x - min_x) as u32;
     let new_height = (max_y - min_y) as u32;
     println!("old width: {}, old height: {}", width, height);
