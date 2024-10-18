@@ -21,6 +21,63 @@ One such image in my case looks like this:
 As one can see there is severe distortion in the image, this can be corrected by using the OpenCV library.
 
 % todo: should i explain in detail how opencv does it?
+% lets do it and later i can delete it if its too much
+
+\subsection{OpenCV}\label{subsec:opencv}
+OpenCV is a library that provides many functions for image processing, one of these functions is the camera calibration function.
+The undistort function takes the images of the checkerboard pattern and calculates the distortion coefficients and the camera matrix.
+
+The key principal is to map the distorted image to an undistorted image, this is done by calculating the pixel coordinates of the undistorted image for each pixel in the distorted image.
+The Formulas for this are:
+\begin{itemize}
+    \item Radial distortion: This is the distortion that makes straight lines appear curved:
+    \begin{gather*}
+        r^2 = x^2 + y^2\\
+        x_{\text{radial}} = x(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
+        y_{\text{radial}} = y(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
+    \end{gather*}
+    \item Tangential distortion: This distortion occurs because the lens and the image sensor are not perfectly parallel.
+    \begin{gather*}
+        x_{\text{tangential}} = 2p_1 xy + p_2(r^2 + 2x^2)\\
+        y_{\text{tangential}} = p_1(r^2 + 2y^2) + 2p_2 xy\\
+    \end{gather*}
+\end{itemize}
+Together that gives:
+\begin{gather*}
+    x' = x_{\text{radial}} + x_{\text{tangential}}\\
+    y' = y_{\text{radial}} + y_{\text{tangential}}\\
+\end{gather*}
+Finally, the undistorted pixel positions are transformed back to image coordinates using the camera matrix \( K \):
+\[
+    \begin{bmatrix}
+        u \\
+        v
+    \end{bmatrix}
+    =
+    K \cdot
+    \begin{bmatrix}
+        x' \\
+        y' \\
+        1
+    \end{bmatrix}
+\]
+where $K$ is the camera matrix:
+\begin{center}
+    K = \begin{bmatrix}
+            f_x & 0   & c_x \\
+            0   & f_y & c_y \\
+            0   & 0   & 1
+    \end{bmatrix}\\
+    where:
+\end{center}
+\begin{itemize}
+    \item $f_x$ and $f_y$ are the focal lengths along the x and y axes (in pixels),
+    \item $c_x$ and $c_y$ are the coordinates of the optical center (principal point), typically at the center of the image.
+\end{itemize}
+These formulas allow the distorted image points to be remapped to undistorted coordinates.
+
+\subsubsection{Implementation}\label{subsubsec:implementation}
+
 
 Using the undistort function provided by opencv is not fast enough for our needs, because we only have 3ms to do the whole image processing and motor controlling.
 So I wrote a custom function that generates a table where the index for each pixel in the new image is stored, so the function doesnt have to calculate the pixel coordinate for the undistorted image each time when the function is called.
@@ -207,8 +264,102 @@ The cropped example image looks like this:
     \label{fig:example8_cropped}
 \end{figure}
 
-\section{Ball Detection}\label{sec:ball-detection}
+\subsection{Real World Coordinates}\label{subsec:real-world-coordinates}
+An important part of the software is to convert the pixel coordinates to real-world coordinates.
+This is done by adding fiducials (markers that are known to be at a specific position) to the table.
+The fiducials are placed at the corners of the table, and the coordinates are measured in millimeters.
+They can be seen here:
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.2\textwidth}
+        \centering
+        \fbox{\includegraphics[width=.7\textwidth]{../photos/fiducials/fiducial_1}}
+        \caption[originalRainbow]{Fiducial 1}
+        \label{fig:fid_1}
+    \end{subfigure}%
+    \begin{subfigure}{.2\textwidth}
+        \centering
+        \fbox{\includegraphics[width=.7\textwidth]{../photos/fiducials/fiducial_2}}
+        \caption[originalRainbow]{Fiducial 2}
+        \label{fig:fid_2}
+    \end{subfigure}
+    \begin{subfigure}{.2\textwidth}
+        \centering
+        \fbox{\includegraphics[width=.7\textwidth]{../photos/fiducials/fiducial_3}}
+        \caption[originalRainbow]{Fiducial 3}
+        \label{fig:fid_3}
+    \end{subfigure}
+    \begin{subfigure}{.2\textwidth}
+        \centering
+        \fbox{\includegraphics[width=.7\textwidth]{../photos/fiducials/fiducial_4}}
+        \caption[originalRainbow]{Fiducial 4}
+        \label{fig:fid_4}
+    \end{subfigure}
+    \caption{Fiducials}
+    \label{fig:fiducials_all}
+\end{figure}
+To calibrate the real world coordinates one has to detect the fiducials reliably in the image.
+This can be done by using a convolutional neural network (CNN) to detect the fiducials.
 
+\subsubsection{Training Data}\label{subsubsec:training-data}
+To train the CNN, one needs a lot of images containing the fiducials, making such a lot of images and then checking where exactly the coordinates of the midpoint of the fiducial lies is very tedious and not practical.
+Therefore i wrote a Java programm to generate about 250 labeled images to train the CNN.
+An image containing all the fiducials looks like this (the red point shows the midpoint of the fiducial):
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{../photos/training_whole_general_image}
+    \caption[fiducials]{Training fiducials}
+    \label{fig:fiducials}
+\end{figure}
+The trick I am using is that I know that the fiducials always lie in the corners of the table, so I can generate the images by just placing the fiducials in the corners with some random offset.
+The different parts can be seen here:
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        % Include the image
+        \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=0.8\textwidth]{../photos/base_img}};
+        \begin{scope}[x={(image.south east)}, y={(image.north west)}]
+            % vertical lines (6 parts)
+            \foreach \i in {1/6, 2/6, 3/6, 4/6, 5/6} {
+                \draw[red, very thick] (\i, 0) -- (\i, 1);
+            }
+            % horizontall lines (4 parts)
+            \foreach \i in {1/4, 2/4, 3/4} {
+                \draw[red, very thick] (0, \i) -- (1, \i);
+            }
+        \end{scope}
+    \end{tikzpicture}
+    \caption{Image split into 4 horizontal and 6 vertical parts}\label{fig:figure}
+\end{figure}
+\textbf{Create and Train the CNN}\\
+I made two separate CNNs, one for detecting the fiducial (number from 1-4 as there are four fiducials) and one for detecting the coordinate of the midpoint of the fiducial (from where the real-world measurements are made).
+The CNNs are trained using the tensorflow library made by google.
+The structure of the CNNs can be seen here:
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=.8\textwidth]{../photos/fiducial_classifier_model}
+        \caption[originalRainbow]{Fiducial classifier model}
+        \label{fig:fiducial_classifier_model}
+    \end{subfigure}%
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=.8\textwidth]{../photos/fiducial_coords_model}
+        \caption[originalRainbow]{Fiducial coordinates model}
+        \label{fig:fiducial_coords_model}
+    \end{subfigure}
+    \caption{Structure of the CNNs}
+    \label{fig:CNN_structure}
+\end{figure}
+
+% Todo add stats about the real world training/tests
+% Todo add heat map of gradient of the image (grad cam)
+
+
+
+\section{Ball Detection}\label{sec:ball-detection}
 
 
 \section{Prediction}\label{sec:prediction}
@@ -217,6 +368,7 @@ The cropped example image looks like this:
 \section{Controlling the motors}\label{sec:controlling-the-motors}
 To control the motors I use an Arduino Mega 2560, because it has enough pins to control all the motors at once.
 The Arduino is connected to the computer via USB, and the computer sends the motor positions to the Arduino via serial communication.
+
 \subsubsection{Controlling the DC-Motor}\label{subsubsec:controlling-the-dc-motor}
 The DC-Motor is controlled by the stepper motor driver L298N as seen here\ref{ch:electronics}.
 

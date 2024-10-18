@@ -4,6 +4,8 @@ use image::{DynamicImage, RgbImage};
 use image::{ImageBuffer, Rgb};
 use nalgebra::{Matrix3, Vector2};
 use rayon::prelude::*;
+use std::fs;
+use std::io;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -143,56 +145,66 @@ fn main() {
     let camera_matrix = CAMERA_MATRIX;
     let dist_coeffs = DIST_COEFFS;
     let new_camera_matrix = Matrix3::new(1000.0, 0.0, 640.0, 0.0, 1000.0, 360.0, 0.0, 0.0, 1.0);
-    let number = 8;
-    let mut img = image::open(format!("input_images/input_image{}.png", number))
-        .expect("Failed to open image");
-    let img = img.to_rgb8();
+    let number = 11;
+    // get all images in the "input_images/" folder
+    let images = fs::read_dir("input_images/")
+        .expect("Failed to read input_images folder")
+        .map(|res| res.map(|e| e.path()))
+        .collect::<Result<Vec<_>, io::Error>>()
+        .expect("Failed to collect images");
+    for image_file in images.iter() {
+        let mut img = image::open(image_file.as_path()).expect("Failed to open image");
+        let img = img.to_rgb8();
 
-    // undistort image
-    let width = 728;
-    let height = 544;
-    let left_margin = 100;
-    let right_margin = 100;
-    let top_margin = 0;
-    let bottom_margin = 28;
-    let min_x = -left_margin;
-    let max_x = width as i32 + right_margin;
-    let min_y = -top_margin;
-    let max_y = height as i32 + bottom_margin;
-    let new_width = (max_x - min_x) as u32;
-    let new_height = (max_y - min_y) as u32;
-    println!("old width: {}, old height: {}", width, height);
-    println!("new width: {}, new height: {}", new_width, new_height);
-    let precompute = matura::gen_table(width, height, new_width, new_height, min_x, min_y);
+        // undistort image
+        let width = 728;
+        let height = 544;
+        let left_margin = 100;
+        let right_margin = 100;
+        let top_margin = 0;
+        let bottom_margin = 28;
+        let min_x = -left_margin;
+        let max_x = width as i32 + right_margin;
+        let min_y = -top_margin;
+        let max_y = height as i32 + bottom_margin;
+        let new_width = (max_x - min_x) as u32;
+        let new_height = (max_y - min_y) as u32;
+        println!("old width: {}, old height: {}", width, height);
+        println!("new width: {}, new height: {}", new_width, new_height);
+        let precompute = matura::gen_table(width, height, new_width, new_height, min_x, min_y);
 
-    // matura::gen_table(&img, 30, 728, 544);
-    //     // let image = matura::undistort_image(&img, 30, width, height);
-    let n = 1000;
-    let mut image = vec![0u8; (new_width * new_height * 3) as usize];
-    let t1 = Instant::now();
-    for _ in 0..n {
-        matura::undistort_image_table(&img, &mut image, &precompute, new_width, new_height);
-    }
-    let dt = t1.elapsed();
-    println!(
-        "Time taken for one avg call: {:?}, time per pixel: {:?}",
-        dt / n,
-        dt / n / (new_width * new_height)
-    );
-    // let image_original = undistort_image_original(&img, camera_matrix, dist_coeffs);
-    // assert_eq!(image, image_original);
-    // Save undistorted image
-    let mut final_image = RgbImage::new(new_width, new_height);
-    for x in 0..new_width {
-        for y in 0..new_height {
-            let pixel_index = (y * new_width + x) as usize * 3;
-            let pixel = &image[pixel_index..pixel_index + 3];
-            final_image.put_pixel(x, y, Rgb([pixel[0], pixel[1], pixel[2]]));
+        // matura::gen_table(&img, 30, 728, 544);
+        //     // let image = matura::undistort_image(&img, 30, width, height);
+        let n = 10;
+        let mut image = vec![0u8; (new_width * new_height * 3) as usize];
+        let t1 = Instant::now();
+        for _ in 0..n {
+            matura::undistort_image_table(&img, &mut image, &precompute, new_width, new_height);
         }
+        let dt = t1.elapsed();
+        println!(
+            "Time taken for one avg call: {:?}, time per pixel: {:?}",
+            dt / n,
+            dt / n / (new_width * new_height)
+        );
+        // let image_original = undistort_image_original(&img, camera_matrix, dist_coeffs);
+        // assert_eq!(image, image_original);
+        // Save undistorted image
+        let mut final_image = RgbImage::new(new_width, new_height);
+        for x in 0..new_width {
+            for y in 0..new_height {
+                let pixel_index = (y * new_width + x) as usize * 3;
+                let pixel = &image[pixel_index..pixel_index + 3];
+                final_image.put_pixel(x, y, Rgb([pixel[0], pixel[1], pixel[2]]));
+            }
+        }
+        final_image
+            .save(format!(
+                "output_images/{}",
+                image_file.file_name().unwrap().to_str().unwrap()
+            ))
+            .expect("Failed to save image");
     }
-    final_image
-        .save(format!("output_images/output{}.png", number))
-        .expect("Failed to save image");
 
     // Load image
     // let mut img = image::open("input_image.png").expect("Failed to open image");
@@ -208,29 +220,29 @@ fn main() {
 
     // Load image
     // let mut img = image::open("input_image2.png").expect("Failed to open image");
-    println!("Image size: {:?}", img.dimensions());
-    // 396032 pixels => 0.396 MP
+    // println!("Image size: {:?}", img.dimensions());
+    // // 396032 pixels => 0.396 MP
 
-    let max_threads = 100; // Adjust this based on your system's capabilities
-                           // Undistort image
-    let best_thread_count = (10..=max_threads)
-        .map(|num_threads| {
-            let t1 = std::time::Instant::now();
-            for i in 0..10 {
-                // let image = matura::undistort_image(&img, num_threads, img.width(), img.height());
-                // img = image::DynamicImage::ImageRgb8(image).into();
-            }
-            let duration = t1.elapsed() / 10;
-            // println!(
-            // "Time taken original: {:?} with {} threads",
-            // duration, num_threads
-            // );
-            (num_threads, duration)
-        })
-        .min_by_key(|&(_, duration)| duration)
-        .unwrap();
-    println!(
-        "Optimal number of threads: {} with duration: {:?}",
-        best_thread_count.0, best_thread_count.1
-    );
+    // let max_threads = 100; // Adjust this based on your system's capabilities
+    //                        // Undistort image
+    // let best_thread_count = (10..=max_threads)
+    //     .map(|num_threads| {
+    //         let t1 = std::time::Instant::now();
+    //         for i in 0..10 {
+    //             // let image = matura::undistort_image(&img, num_threads, img.width(), img.height());
+    //             // img = image::DynamicImage::ImageRgb8(image).into();
+    //         }
+    //         let duration = t1.elapsed() / 10;
+    //         // println!(
+    //         // "Time taken original: {:?} with {} threads",
+    //         // duration, num_threads
+    //         // );
+    //         (num_threads, duration)
+    //     })
+    //     .min_by_key(|&(_, duration)| duration)
+    //     .unwrap();
+    // println!(
+    //     "Optimal number of threads: {} with duration: {:?}",
+    //     best_thread_count.0, best_thread_count.1
+    // );
 }

@@ -24,7 +24,6 @@ eframe = { version = "0.27.2", default-features = false, features = [
 ] }
 regex = "1.10.6"
 chrono = "0.4.38"
-rxing = "0.6.1"
 
 [profile.release]
 debug = 1
