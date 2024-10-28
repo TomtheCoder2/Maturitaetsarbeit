@@ -2,8 +2,8 @@
 The software has the task to gather the image information from the camera, detecting the ball, predicting where it will go in the future and controlling the motors to either stop or shoot the ball.
 This task can be split into the following chapters:
 \begin{itemize}
-    \item \textbf{Optics}: Correcting for Lens distortion
-    \item \textbf{Ball Detection}: Detecting the ball in the image and converting the coordinates to real world coordinates
+    \item \textbf{Optics}: Correcting for Lens distortion and converting the pixel coordinates to real world coordinates
+    \item \textbf{Ball Detection}: Detecting the ball in the image
     \item \textbf{Prediction}: Predicting the ball movement
     \item \textbf{Controlling the motors}: Finally, we move the motors to the correct position
 \end{itemize}
@@ -25,18 +25,18 @@ As one can see there is severe distortion in the image, this can be corrected by
 
 \subsection{OpenCV}\label{subsec:opencv}
 OpenCV is a library that provides many functions for image processing, one of these functions is the camera calibration function.
-The undistort function takes the images of the checkerboard pattern and calculates the distortion coefficients and the camera matrix.
+The function takes the images of the checkerboard pattern and calculates the distortion coefficients and the camera matrix.
 
 The key principal is to map the distorted image to an undistorted image, this is done by calculating the pixel coordinates of the undistorted image for each pixel in the distorted image.
 The Formulas for this are:
 \begin{itemize}
-    \item Radial distortion: This is the distortion that makes straight lines appear curved:
+    \item \textbf{Radial distortion:} This is the distortion that makes straight lines appear curved:
     \begin{gather*}
         r^2 = x^2 + y^2\\
         x_{\text{radial}} = x(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
         y_{\text{radial}} = y(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
     \end{gather*}
-    \item Tangential distortion: This distortion occurs because the lens and the image sensor are not perfectly parallel.
+    \item \textbf{Tangential distortion:} This distortion occurs because the lens and the image sensor are not perfectly parallel.
     \begin{gather*}
         x_{\text{tangential}} = 2p_1 xy + p_2(r^2 + 2x^2)\\
         y_{\text{tangential}} = p_1(r^2 + 2y^2) + 2p_2 xy\\
@@ -228,7 +228,7 @@ An illustration can be seen in this example rainbow image being given to the und
     \caption{Undistorted rainbow image}
     \label{fig:original_undistorted_rainbow}
 \end{figure}
-The undistorted image\ref{fig:undistorted_rainbow} is larger than the original rainbow image\ref{fig:original_rainbow}, that is because some pixel are moved out of the original image bounds because the camera can see \"further\" at the corners than at the sides.
+The undistorted image~\ref{fig:undistorted_rainbow} is larger than the original rainbow image~\ref{fig:original_rainbow}, that is because some pixel are moved out of the original image bounds because the camera can see "further" at the corners than at the sides.
 This effect can also be seen in some example footage of the table:
 \begin{figure}[H]
     \centering
@@ -256,6 +256,7 @@ The GUI can be seen here:
     \label{fig:margin_adj_gui}
 \end{figure}
 The GUI is also written in rust using the egui\autocite{egui} library.
+\todo{Fix the egui cite command (numbers instead of name)}
 The cropped example image looks like this:
 \begin{figure}[H]
     \centering
@@ -319,7 +320,8 @@ The different parts can be seen here:
     \begin{tikzpicture}
         % Include the image
         \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=0.8\textwidth]{../photos/base_img}};
-        \begin{scope}[x={(image.south east)}, y={(image.north west)}]
+        \begin{scope}
+            [x={(image.south east)}, y={(image.north west)}]
             % vertical lines (6 parts)
             \foreach \i in {1/6, 2/6, 3/6, 4/6, 5/6} {
                 \draw[red, very thick] (\i, 0) -- (\i, 1);
@@ -333,7 +335,7 @@ The different parts can be seen here:
     \caption{Image split into 4 horizontal and 6 vertical parts}\label{fig:figure}
 \end{figure}
 \textbf{Create and Train the CNN}\\
-I made two separate CNNs, one for detecting the fiducial (number from 1-4 as there are four fiducials) and one for detecting the coordinate of the midpoint of the fiducial (from where the real-world measurements are made).
+I made two separate CNNs, one for detecting the fiducial (number from 1-4 as there are four fiducials) (also known as classification) and one for detecting the coordinate of the midpoint of the fiducial (from where the real-world measurements are made).
 The CNNs are trained using the tensorflow library made by google.
 The structure of the CNNs can be seen here:
 \begin{figure}[H]
@@ -353,16 +355,110 @@ The structure of the CNNs can be seen here:
     \caption{Structure of the CNNs}
     \label{fig:CNN_structure}
 \end{figure}
+An interesting way to visualize the way the CNN works is to use gradcam to visualize the gradient of the image, which corresponds to the parts of the image the CNN is looking at.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../photos/gradcam_combined_image}
+    \caption[cnn-gradcam]{Gradcam of the different layers (using another CNN which was trained to do the same task)}
+    \label{fig:gradcam_combined_image}
+\end{figure}
 
 % Todo add stats about the real world training/tests
-% Todo add heat map of gradient of the image (grad cam)
-
+\todo{Todo add stats about the real world training/tests}
 
 
 \section{Ball Detection}\label{sec:ball-detection}
+The ball detection is a crucial part of the software, because if the ball is not detected correctly, the whole system will not work.
+To detect ball an image is taken without the ball present and then the image with the ball is subtracted from the image without the ball, so that only the ball remains in the image.
+But a problem that arises is that also other things that change are detected, like people moving or the table moving.
+Luckily the glass table is so reflective and the light from the bottom is strong enough that the people behind the glass table have a low contrast in the image, so they are not detected.
+To detect the ball I just filter out the white pixels in the image, because the ball is white.
+The ball detection can be seen here:
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../photos/ball_detection}
+    \caption[ball-detection]{Ball detection in action}
+    \label{fig:ball_detection}
+\end{figure}
+But having the pixel coordinates is not very useful, so we have to convert the pixel coordinates to real-world coordinates.
+To compute the real world coordinates we compare the pixel coordinates of the ball to the pixel coordinates of the fiducials.
+I measured the distance between the walls and the fiducials and made a coordinate system so that the fiducial with the number 2 lies in the top left corner (0,0) and the other fiducials are placed accordingly.
+Then to compute the real world coordinates I use a homography matrix to transform the pixel coordinates to real world coordinates.
+\section*{Homography Calculation}
+
+Homography is used to map points from image coordinates to real-world coordinates.
+The transformation is defined as:
+
+\begin{equation}
+    \begin{bmatrix}
+        x' \\
+        y' \\
+        1
+    \end{bmatrix}
+    = H \cdot
+    \begin{bmatrix}
+        x \\
+        y \\
+        1
+    \end{bmatrix}\label{eq:homography}
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item \( (x, y) \) are the pixel coordinates,
+    \item \( (x', y') \) are the real-world coordinates,
+    \item \( H \) is the \( 3 \times 3 \) homography matrix.
+\end{itemize}
+
+In Python, we compute \( H \) using the $cv2.findHomography$ function:
+
+%\begin{lstlisting}[language=python,breaklines,label={lst:python_homography}]
+%homography_matrix, _ = cv2.findHomography(pixel_points, real_points)
+%\end{lstlisting}
+
+\[
+    H, \text{\_} = \text{cv2.findHomography}(\text{pixel\_points}, \text{real\_points})
+\]
+% todo: should i explain how the homography matrix is calculated?
+\todo{Should i explain how the homography matrix is calculated?}
+
+In Rust, this matrix is applied to new pixel points via matrix multiplication and normalization.
+% todo: should i explain that i save the stuff a file and then read it to save time?
 
 
 \section{Prediction}\label{sec:prediction}
+To predict where the ball will go in the future I use a simple linear regression model.
+But first I have to check whether the ball is still flying into the same direction and with the same velocity.
+This is done by using the last position and computing the current position with the current velocity.
+If the difference between the prediction and the the real world position is too large then I delete the positions and start over.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../photos/ball_prediction}
+    \caption[ball-prediction]{Prediction of the future positions of the ball. The green balls are the last positions and the violet line is the current velocity}
+    \label{fig:ball_prediction}
+\end{figure}
+
+% todo: should i explain the linear regression model and the linear algebra behind it?
+\todo{Should i explain the linear regression model and the linear algebra behind it?}
+To find out where the ball will end up when it reaches the goalkepper (or any player), I can just compute the intersection between the line of the ball and the line of the goalkepper.
+The line of the ball can be computed with the current position $\vec{r}$, the current velocity $\vec{v}$ and the player's $x$ coordinate.
+\begin{equation}
+    \begin{split}
+        \vec{r} &= \begin{bmatrix}
+                       x \\
+                       y
+        \end{bmatrix}\\
+        \vec{v} &= \begin{bmatrix}
+                       v_x \\
+                       v_y
+        \end{bmatrix}\\
+%    let t = (x - self.position.x) / self.velocity.x;
+%        Some(self.position + self.velocity * t)
+        t &= \frac{x - r_x}{v_x}\\
+        \vec{r}_\text{intersection} &= \vec{r} + \vec{v} \cdot t
+    \end{split}\label{eq:ball_intersection}
+\end{equation}
+Now we only have to convert the $\vec{r}_\text{intersection}$ to real world coordinates and we have the position where the ball will end up, which we send to the arduino to move the stepper motor to this position.
 
 
 \section{Controlling the motors}\label{sec:controlling-the-motors}
@@ -371,6 +467,7 @@ The Arduino is connected to the computer via USB, and the computer sends the mot
 
 \subsubsection{Controlling the DC-Motor}\label{subsubsec:controlling-the-dc-motor}
 The DC-Motor is controlled by the stepper motor driver L298N as seen here\ref{ch:electronics}.
+
 
 
 

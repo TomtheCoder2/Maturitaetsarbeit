@@ -93,7 +93,7 @@ callbacks = [
 ]
 
 # Train the model
-history = model.fit(X, y, epochs=50, batch_size=32, validation_split=0.2)
+history = model.fit(X, y, epochs=50, batch_size=16, validation_split=0.2)
 
 # Save the trained model
 model.save('fiducial_coords_model.keras')

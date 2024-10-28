@@ -4,15 +4,19 @@ use std::time::Duration;
 
 use com::commands::Command;
 use serialport::prelude::*;
-
+use std::thread::sleep;
 fn send_command(serial: &mut Box<dyn SerialPort>, command: Command) {
     let encoded = command.encode();
+    let length = Command::length_c(&command);
     // filter out all 0s
-    let encoded = encoded
-        .iter()
-        .filter(|x| **x != 0)
-        .map(|x| *x)
-        .collect::<Vec<u8>>();
+    // let encoded = encoded
+    // .iter()
+    // .filter(|x| **x != 0)
+    // .map(|x| *x)
+    // .collect::<Vec<u8>>();
+    let encoded = encoded.to_vec()[0..length].to_vec();
+    println!("Encoded: {:?}", encoded);
+    println!("length: {}, len: {}", length, encoded.len());
     serial.write_all(&encoded).expect("Failed to write to port");
 }
 
@@ -44,8 +48,14 @@ fn main() -> std::io::Result<()> {
     println!("Encoded: {:?}", encoded);
     println!("Decoded: {:?}", String::from_utf8_lossy(&encoded.to_vec()));
 
+    // list all ports and their names
+    let ports = serialport::available_ports()?;
+    for port in ports {
+        println!("{:?}", port);
+    }
+
     // Configure the serial port
-    let port_name = "COM5"; // Replace with the correct port for your Arduino
+    let port_name = "COM4"; // Replace with the correct port for your Arduino
     let baud_rate = 57600;
 
     let serial_settings = SerialPortSettings {
@@ -64,41 +74,60 @@ fn main() -> std::io::Result<()> {
     // port.write_all(&[command]).expect("Failed to write to port");
     // drop(port);
     send_command(&mut port, Command::Start);
-    println!("Command sent");
+    println!("start command sent");
+    // wait for the arduino to start
+    let c = receive_command(&mut port);
+    println!("Received command: {:?}", c);
+
+    sleep(Duration::from_secs(1));
+    loop {
+        // send_command(&mut port, Command::Start);
+        send_command(&mut port, Command::Pos(50));
+        println!("pos 50 command sent");
+        sleep(Duration::from_secs(3));
+        // let c = receive_command(&mut port);
+        // println!("Received command: {:?}", c);
+        send_command(&mut port, Command::Pos(0));
+        println!("pos -50 command sent");
+        sleep(Duration::from_secs(3));
+        // let c = receive_command(&mut port);
+        // println!("Received command: {:?}", c);
+    }
+
     // let mut port = serialport::open_with_settings(port_name, &serial_settings)
     //     .expect("Failed to open port");
 
-    let mut file = File::create("./output.csv")?;
-    file.write_all(b"Pos\n")?;
+    // let mut file = File::create("./output.csv")?;
+    // file.write_all(b"Pos\n")?;
 
-    let mut buffer = [0; 1];
-    let mut data = "".to_string();
+    // let mut buffer = [0; 1];
+    // let mut data = "".to_string();
 
-    loop {
-        let command = receive_command(&mut port);
-        match command {
-            Command::Data(arr) => {
-                println!("Received data command: {:?}", arr);
-                for val in arr.iter() {
-                    file.write_all(format!("{}\n", val).as_bytes())?;
-                }
-                // file.write_all(b"\n")?;
-                file.flush()?;
-                // println!("Data written to file: path: {}", file.path().display());
-            }
-            Command::Stop => {
-                println!("Received stop command");
-                break;
-            }
-            _ => {
-                println!("Received command: {:?}", command);
-            }
-        }
-        data.push_str(&String::from_utf8((&buffer).to_vec()).unwrap());
-        // println!("Data: {}", data);
-    }
+    // loop {
+    //     let command = receive_command(&mut port);
+    //     match command {
+    //         Command::Data(arr) => {
+    //             println!("Received data command: {:?}", arr);
+    //             for val in arr.iter() {
+    //                 file.write_all(format!("{}\n", val).as_bytes())?;
+    //             }
+    //             // file.write_all(b"\n")?;
+    //             file.flush()?;
+    //             // println!("Data written to file: path: {}", file.path().display());
+    //         }
+    //         Command::Stop => {
+    //             println!("Received stop command");
+    //             break;
+    //         }
+    //         _ => {
+    //             println!("Received command: {:?}", command);
+    //         }
+    //     }
+    //     data.push_str(&String::from_utf8((&buffer).to_vec()).unwrap());
+    //     // println!("Data: {}", data);
+    // }
 
-    // port.write_all(&[b's']).expect("Failed to write to port");
+    // // port.write_all(&[b's']).expect("Failed to write to port");
 
     Ok(())
 }

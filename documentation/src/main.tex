@@ -16,12 +16,7 @@
 \usepackage{subcaption}
 \usepackage [autostyle, english = american]{csquotes}
 \usepackage{hyperref}
-\hypersetup{
-    colorlinks,
-    linkcolor={blue!50!black},
-    citecolor={blue!50!black},
-    urlcolor={blue!80!black}
-}
+
 \usepackage[backend=bibtex, urldate=long, sorting=none, defernumbers=true,autocite=superscript]{biblatex}
 
 % rust formatting
@@ -51,18 +46,18 @@
     backgroundcolor=\color{GrayCodeBlock},
     basicstyle=\ttfamily\color{BlackText},
     keywords={
-        true,false,
-        unsafe,async,await,move,
-        use,pub,crate,super,self,mod,
-        struct,enum,fn,const,static,let,mut,ref,type,impl,dyn,trait,where,as,
-        break,continue,if,else,while,for,loop,match,return,yield,in
-    },
+    true,false,
+    unsafe,async,await,move,
+    use,pub,crate,super,self,mod,
+    struct,enum,fn,const,static,let,mut,ref,type,impl,dyn,trait,where,as,
+    break,continue,if,else,while,for,loop,match,return,yield,in
+},
     keywordstyle=\color{PurpleKeyword},
     ndkeywords={
-        bool,u8,u16,u32,u64,u128,i8,i16,i32,i64,i128,char,str,
-        Self,Option,Some,None,Result,Ok,Err,String,Box,Vec,Rc,Arc,Cell,RefCell,HashMap,BTreeMap,
-        macro_rules
-    },
+    bool,u8,u16,u32,u64,u128,i8,i16,i32,i64,i128,char,str,
+    Self,Option,Some,None,Result,Ok,Err,String,Box,Vec,Rc,Arc,Cell,RefCell,HashMap,BTreeMap,
+    macro_rules
+},
     ndkeywordstyle=\color{RedTypename},
     comment=[l][\color{GrayComment}\slshape]{//},
     morecomment=[s][\color{GrayComment}\slshape]{/*}{*/},
@@ -92,6 +87,14 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 \newcommand{\mycancel}[2]{\overset{#1}{\cancel{#2}}}
 \renewcommand{\deg}[0]{\ensuremath{^\circ}}
 \newcommand{\abs}[1]{\left|#1\right|}
+\newcommand{\cfbox}[2]{%
+    \colorlet{currentcolor}{.}%
+    {\color{#1}%
+    \noindent\fbox{\vbox{\hsize\dimexpr\hsize-2\fboxsep\relax
+    #2
+    }}}%
+}
+\newcommand{\todo}[1]{\begin{center}\cfbox{red}{\textcolor{red}{Todo: #1}}\end{center}}
 
 \oddsidemargin=-1.5cm
 \voffset=-1.7cm
@@ -105,6 +108,13 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 \fancyhf{} % clear all fields
 \newcommand{\footl}{Matura Project}
 
+\hypersetup{
+    colorlinks,
+    linkcolor={blue!50!black},
+    citecolor={blue!50!black},
+    urlcolor={blue!80!black}
+}
+
 \fancypagestyle{plain}{%
     \fancyhf{}
     \fancyhead[L]{\rule[-2ex]{0pt}{2ex}\small Matura Project}
@@ -115,7 +125,6 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \renewcommand{\headrulewidth}{0.2pt}
     \renewcommand{\footrulewidth}{0.2pt}}
 \pagestyle{plain}
-
 
 
 % Document
@@ -130,8 +139,10 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \chapter{Introduction}\label{ch:introduction}
     \input{introduction}
 
+
     \chapter{Calculations}\label{ch:calculations}
     \input{calculations}
+
 
     \chapter{Mechanics}\label{ch:mechanics}
     \input{mechanics}
@@ -146,23 +157,32 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \chapter{Software}\label{ch:software}
     \input{software}
 
+
     \chapter{Construction}\label{ch:construction}
+
 
     \section{Timeline}\label{sec:timeline}
 
+
     \chapter{Conclusion}\label{ch:conclusion}
+
 
     \section{What I learned}\label{sec:learned}
 
+
     \section{What I would do differently}\label{sec:different}
+
 
     \section{Future improvements}\label{sec:improvements}
 
+
     \section{Acknowledgements}\label{sec:acknowledgements}
+
 
     \section{References}\label{sec:references}
     \bibliographystyle{plain}
     \bibliography{sources}
+
 
     \section{Appendix}\label{sec:appendix}
 

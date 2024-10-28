@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use std::fmt::format;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
@@ -11,6 +12,7 @@ use cameleon::Camera;
 use eframe::Frame;
 use egui::Context;
 use egui::{ColorImage, TextureHandle};
+use matura::ball::BallComp;
 use matura::increment_last_number_in_filename;
 
 use crate::Command::*;
@@ -48,6 +50,19 @@ pub struct App {
     #[serde(skip)]
     raw_image: ColorImage,
     show_original: bool,
+    overlay_raw_img: bool,
+    #[serde(skip)]
+    ball_comp: BallComp,
+    #[serde(skip)]
+    start_time: Instant,
+    #[serde(skip)]
+    compute_rl_coords: matura::compute_rl_coords::RLCompute,
+    #[serde(skip)]
+    arduino_com: matura::arduino_com::ArduinoCom,
+    #[serde(skip)]
+    last_command: Instant,
+    speed: i32,
+    motor_pos: i32,
 }
 
 impl Default for App {
@@ -65,16 +80,27 @@ impl Default for App {
             recorded_images: Vec::new(),
             recording: false,
             // read the image from ./raw.png
-            raw_image: {
-                let image = image::open("./raw.png").expect("Failed to open image");
-                let rgb8_data = image.to_rgb8().into_raw();
-                let width = image.width() as usize;
-                let height = image.height() as usize;
-                create_color_image_from_rgb8(&rgb8_data, width, height)
-            },
+            raw_image: load_raw(),
             show_original: false,
+            overlay_raw_img: false,
+            ball_comp: BallComp::default(),
+            start_time: Instant::now(),
+            compute_rl_coords: matura::compute_rl_coords::RLCompute::new(),
+            arduino_com: matura::arduino_com::ArduinoCom::new(),
+            last_command: Instant::now(),
+            speed: 100,
+            motor_pos: 0,
         }
     }
+}
+
+fn load_raw() -> ColorImage {
+    let image = image::open("./raw.png").expect("Failed to open image");
+    let rgb8_data = image.to_rgb8().into_raw();
+    let width = image.width() as usize;
+    let height = image.height() as usize;
+    println!("Loaded raw image: {}x{}", width, height);
+    create_color_image_from_rgb8(&rgb8_data, width, height)
 }
 
 fn load_texture_from_image(ctx: &Context, image: ColorImage) -> TextureHandle {
@@ -134,28 +160,6 @@ impl eframe::App for App {
                 ImageBuffer::from_raw(buffer_undistorted.0, buffer_undistorted.1, image.to_vec())
                     .unwrap(),
             );
-            // subract self.raw_image from image
-            // let raw_image = &self.raw_image;
-            // for x in 0..raw_image.width() {
-            //     for y in 0..raw_image.height() {
-            //         let raw_pixel = raw_image.pixels[y * raw_image.width() + x];
-            //         let image_pixel = image.get_pixel(x as u32, y as u32);
-            //         let r = image_pixel[0] as i32 - raw_pixel[0] as i32;
-            //         let g = image_pixel[1] as i32 - raw_pixel[1] as i32;
-            //         let b = image_pixel[2] as i32 - raw_pixel[2] as i32;
-            //         // image.put_pixel(
-            //         // x as u32,
-            //         // y as u32,
-            //         // image::Rgba([
-            //         // (r.max(0) as u8).min(255),
-            //         // (g.max(0) as u8).min(255),
-            //         // (b.max(0) as u8).min(255),
-            //         // 255,
-            //         // ]),
-            //         // );
-            //     }
-            // }
-            // dbg!();
 
             let new_height = 700;
             let new_width =
@@ -165,6 +169,34 @@ impl eframe::App for App {
             let original_image = DynamicImage::ImageRgb8(
                 ImageBuffer::from_raw(width, height, buffer.to_vec()).unwrap(),
             );
+            // subract self.raw_image from image
+            if self.overlay_raw_img {
+                let raw_image = &self.raw_image;
+                for x in 0..raw_image.width() {
+                    for y in 0..raw_image.height() {
+                        let raw_pixel = raw_image.pixels[y * raw_image.width() + x];
+                        if x >= image.width() as usize || y >= image.height() as usize {
+                            println!("Pixel out of bounds: {}x{}", x, y);
+                            continue;
+                        }
+                        let image_pixel = image.get_pixel(x as u32, y as u32);
+                        let r = image_pixel[0] as i32 - raw_pixel[0] as i32;
+                        let g = image_pixel[1] as i32 - raw_pixel[1] as i32;
+                        let b = image_pixel[2] as i32 - raw_pixel[2] as i32;
+                        image.put_pixel(
+                            x as u32,
+                            y as u32,
+                            image::Rgba([
+                                (r.max(0) as u8).min(255),
+                                (g.max(0) as u8).min(255),
+                                (b.max(0) as u8).min(255),
+                                255,
+                            ]),
+                        );
+                    }
+                }
+            }
+            // dbg!();
             // let original_image =
             // original_image.resize(width, height, image::imageops::FilterType::Nearest);
             let height = image.height();
@@ -184,11 +216,46 @@ impl eframe::App for App {
                     // pixel.2 = image::Rgba([255, 255, 255, gray]);
                 }
             }
-            let image = ColorImage::from_rgb(
+
+            let time = Instant::now().duration_since(self.start_time).as_secs_f32();
+            let ball = matura::ball::read_image_vis(&mut image, &mut self.ball_comp, time);
+            ui.label(format!(
+                "Ball: x: {:.2}, y: {:.2}, radius: {:.2}, velocity: x: {:.2}, y: {:.2}, magnitude: {:.2}",
+                ball.0, ball.1, ball.2, self.ball_comp.velocity.x, self.ball_comp.velocity.y, self.ball_comp.velocity.magnitude()
+            ));
+            // if let Some(pos) = self.arduino_com.try_receive_command() {
+                // if let com::commands::Command::Pos(p) = pos {
+                    // self.motor_pos = p;
+                // }
+            // }
+            ui.label(format!("Motor pos: {}", self.motor_pos));
+            // x = 102 is the player
+            if let Some(y_inercept) =  self.ball_comp.intersection_x(102.){
+                let rl_y_intercept = self.compute_rl_coords.transform_point((y_inercept.x, y_inercept.y));
+                // y=0 for the player is at 450mm rl coords
+                let player_y = 450. - rl_y_intercept.1;
+                ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
+                    ui.label(format!("Player pos: y: {:.2}", player_y));});
+                if player_y > 5. && player_y < 140. && self.last_command.elapsed().as_secs_f32() > 0.1 {
+                    // gear: diameter = 83mm, 200 steps per revolution, 1
+                    // c
+                    // 8° per step
+                    let rot = player_y / (PI * 64.) * 200.;
+                    // println!("pos: {player_y}");
+                    // if rot < 30. {
+                        // self.arduino_com.send_command(com::commands::Command::Reset(40));
+                    // }
+                    self.arduino_com.send_stepper_motor_speed(self.speed);
+                    self.arduino_com.send_stepper_motor_pos(rot as i32);
+                    self.last_command = Instant::now();
+                }
+            }
+
+            let ci_image = ColorImage::from_rgb(
                 [image.width() as usize, image.height() as usize],
                 image.as_bytes(),
             );
-            let undistorted_texture = load_texture_from_image(ctx, image.clone());
+            let undistorted_texture = load_texture_from_image(ctx, ci_image.clone());
             let original_texture = load_texture_from_image(
                 ctx,
                 ColorImage::from_rgb(
@@ -200,17 +267,17 @@ impl eframe::App for App {
                 ),
             );
             if self.recording {
-                self.recorded_images.push(image.clone());
+                self.recorded_images.push(ci_image.clone());
             }
 
             if self.auto_exposure {
                 // caluclate average brightness
                 let mut brightness = 0.0;
-                for i in 0..image.pixels.len() {
-                    let pixel = image.pixels[i];
+                for i in 0..ci_image.pixels.len() {
+                    let pixel = ci_image.pixels[i];
                     brightness += pixel.r() as f64 + pixel.g() as f64 + pixel.b() as f64;
                 }
-                brightness /= image.pixels.len() as f64;
+                brightness /= ci_image.pixels.len() as f64;
                 let target_brightness = 0.5 * 255.0 * 3.0;
                 println!(
                     "brightness: {}, target_brightness: {}",
@@ -223,22 +290,14 @@ impl eframe::App for App {
             }
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut self.file_name);
-                if ui.button("Save Image").clicked()
-                    || ui.input(|ui| ui.key_pressed(egui::Key::Enter))
-                    || (self.calibration_mode
-                        && Instant::now()
-                            .duration_since(self.last_cal_image)
-                            .as_secs_f64()
-                            > self.calibration_interval)
-                {
-                    let mut file = std::fs::File::create(&self.file_name).unwrap();
-                    let width = original_image.width() as usize;
-                    let height = original_image.height() as usize;
+                fn save_img(image: DynamicImage, file_name: String) {
+                    let width = image.width() as usize;
+                    let height = image.height() as usize;
                     // write image to file
                     let mut image_buffer = ImageBuffer::new(width as u32, height as u32);
                     for x in 0..width as usize {
                         for y in 0..height as usize {
-                            let pixel = original_image.get_pixel(x as u32, y as u32);
+                            let pixel = image.get_pixel(x as u32, y as u32);
                             image_buffer.put_pixel(
                                 x as u32,
                                 y as u32,
@@ -247,18 +306,39 @@ impl eframe::App for App {
                         }
                     }
                     image_buffer
-                        .save(if !self.file_name.clone().ends_with("png") {
-                            self.file_name.clone() + ".png"
+                        .save(if !file_name.clone().ends_with("png") {
+                            file_name.clone() + ".png"
                         } else {
-                            self.file_name.clone()
+                            file_name.clone()
                         })
                         .expect("Could not save image");
+                }
+                if ui.button("Save Image").clicked()
+                    || ui.input(|ui| ui.key_pressed(egui::Key::Enter))
+                    || (self.calibration_mode
+                        && Instant::now()
+                            .duration_since(self.last_cal_image)
+                            .as_secs_f64()
+                            > self.calibration_interval)
+                {
+                    save_img(image.clone(), self.file_name.clone());
+                    save_img(original_image, self.file_name.clone() + "_raw");
                     if self.calibration_mode {
                         self.file_name = increment_last_number_in_filename(&self.file_name)
                             .expect("Could not increment last number in filename");
                         self.last_cal_image = Instant::now();
                     }
                 }
+                if ui.button("Save Raw overlay").clicked() {
+                    save_img(image.clone(), "./raw.png".to_string());
+                    self.raw_image = load_raw();
+                }
+                    ui.label("Speed:");
+                    ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
+                    if ui.button("Reset").clicked() {
+                        self.arduino_com.send_command(com::commands::Command::Reset(0));
+                    }
+
             });
             ui.horizontal(|ui| {
                 ui.label("Exposure: ");
@@ -272,6 +352,7 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.show_original, "Show original Image");
                 ui.checkbox(&mut self.auto_exposure, "Auto Exposure");
                 ui.checkbox(&mut self.calibration_mode, "Calibration Mode");
+                ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
                 if self.calibration_mode {
                     ui.label("Calibration Image Interval: ");
                     ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
@@ -368,9 +449,11 @@ impl eframe::App for App {
 
 impl App {
     pub fn new(tx: Sender<Command>, cc: &eframe::CreationContext<'_>) -> Self {
-        let mut app = App::default();
+        let mut app;
         if let Some(storage) = cc.storage {
             app = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        } else {
+            app = App::default();
         };
         app.sender = tx;
         // send current exposure to camera

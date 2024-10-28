@@ -3,12 +3,21 @@ from tensorflow.keras import layers, models
 from tensorflow.keras.preprocessing import image_dataset_from_directory
 from tensorflow.keras.models import load_model
 
+# Enable memory growth for GPUs
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except RuntimeError as e:
+        print(e)
+
 # Set the directory where the images are stored (organized by folders)
 # dataset_directory = "../java_ma/fiducial_training_sets/"  # Make sure it's structured as: fiducial_1, fiducial_2, fiducial_3, fiducial_4
 dataset_directory = "../java_ma/real_fiducial_sets/"
 
 # Load the dataset, automatically splitting it into training and validation sets
-batch_size = 64
+batch_size = 8
 # 154 143
 img_height = 154
 img_width = 143
@@ -51,8 +60,9 @@ model = models.Sequential([
     layers.Dense(128, activation='relu'),
     layers.Dense(4, activation='softmax')  # 4 classes for the 4 fiducials
 ])
+# model =tf.keras.applications.EfficientNetB0(input_shape=(img_height, img_width, 3), include_top=True, weights='imagenet')
 
-model = load_model('fiducial_classifier_model.keras')
+# model = load_model('fiducial_classifier_model.keras')
 
 # Compile the model
 model.compile(optimizer='adam',
@@ -64,7 +74,8 @@ epochs = 50  # You can adjust based on your dataset size
 history = model.fit(
     train_dataset,
     validation_data=val_dataset,
-    epochs=epochs
+    epochs=epochs,
+    batch_size=batch_size
 )
 
 # Save the model for future use
@@ -73,3 +84,5 @@ model.save('fiducial_classifier_model.keras')
 # Evaluate the model
 test_loss, test_acc = model.evaluate(val_dataset, verbose=2)
 print(f"Validation accuracy: {test_acc:.4f}")
+
+

@@ -10,6 +10,8 @@ pub enum Command {
     Data([i32; 1000]),
     Start,
     Stop,
+    Speed(i32),
+    Reset(i32),
 }
 
 impl Eq for Command {}
@@ -23,6 +25,8 @@ impl PartialEq for Command {
             (Command::Data(a), Command::Data(b)) => a == b,
             (Command::Start, Command::Start) => true,
             (Command::Stop, Command::Stop) => true,
+            (Command::Speed(a), Command::Speed(b)) => a == b,
+            (Command::Reset(a), Command::Reset(b)) => a == b,
             _ => false,
         }
     }
@@ -40,6 +44,8 @@ impl Command {
             3 => 4005, // Data
             4 => 1,    // Start
             5 => 1,    // Stop
+            6 => 5,    // Speed
+            7 => 5,    // Reset
             _ => {
                 panic!("Unknown command: {}", ty);
             }
@@ -54,6 +60,8 @@ impl Command {
             Command::Data(_) => 4005,        // Data
             Command::Start => 1,             // Start
             Command::Stop => 1,              // Stop
+            Command::Speed(_) => 5,          // Speed
+            Command::Reset(_) => 5,          // Reset
         }
     }
 
@@ -108,6 +116,17 @@ impl Command {
                 buffer[index] = 5; // Identifier for Stop
                 index += 1;
             }
+            Command::Speed(val) => {
+                buffer[index] = 6; // Identifier for Speed
+                index += 1;
+                buffer[index..index + 4].copy_from_slice(&val.to_le_bytes());
+                index += 4;
+            }
+            Command::Reset(val) => {
+                buffer[index] = 7; // Identifier for Reset
+                index += 1;
+                buffer[index..index + 4].copy_from_slice(&val.to_le_bytes());
+            }
         }
 
         buffer
@@ -154,6 +173,14 @@ impl Command {
             }
             4 => Some(Command::Start),
             5 => Some(Command::Stop),
+            6 => {
+                let val = i32::from_le_bytes(bytes[cursor..cursor + 4].try_into().ok()?);
+                Some(Command::Speed(val))
+            }
+            7 => {
+                let val = i32::from_le_bytes(bytes[cursor..cursor + 4].try_into().ok()?);
+                Some(Command::Reset(val))
+            }
             _ => None,
         }
     }

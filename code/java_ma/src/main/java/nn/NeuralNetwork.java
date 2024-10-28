@@ -1,7 +1,6 @@
 package nn;//import com.google.gson.Gson;
 
 import com.google.gson.Gson;
-import ec.datasets.AllColorsTrainer;
 import org.jfree.chart.title.TextTitle;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.ui.ApplicationFrame;
@@ -510,7 +509,7 @@ public class NeuralNetwork {
     public void resetGui(int iter, int epochs, double[][] Y) {
         chart.clearSubtitles();
 //        changeEpochs(epochs);
-        chart.addSubtitle(new TextTitle("layer Sizes: " + this.layer_sizes.toString() + " epochs: " + this.localEpochs + " iterations: " + this.localIter + " learning rate: " + this.l_rate + " current Gen: " + (AllColorsTrainer.ec != null ? AllColorsTrainer.ec.currentGeneration : "undefined")));
+        chart.addSubtitle(new TextTitle("layer Sizes: " + this.layer_sizes.toString() + " epochs: " + this.localEpochs + " iterations: " + this.localIter + " learning rate: " + this.l_rate + " current Gen: " + "undefined"));
         for (XYSeries s : seriesList) {
             s.clear();
         }

@@ -9,6 +9,7 @@ import os
 import random
 import math
 import cv2
+import sys
 
 def predict_midpoint(model, image_path, img_size=(154, 143)):
     img = load_img(image_path, target_size=img_size)
@@ -41,7 +42,9 @@ def predict_fiducial(model, image_path, img_size=(154, 143)):
     # Return the predicted class label
     return class_labels[predicted_class[0]]
 
-image = Image.open("./base_img6.png")
+# get first argument (image path) (or else base_img.png)
+image_path = sys.argv[1] if len(sys.argv) > 1 else "base_img.png"
+image = Image.open(image_path)
 width, height = image.width, image.height
 print(f"Width: {width} Height: {height}")
 
@@ -78,12 +81,19 @@ coords_model = tf.keras.models.load_model("fiducial_coords_model.keras")
 print("Classifying images")
 top_left_fiducial_number = predict_fiducial(classify_model, "./tmp/top_left.png")
 print("Top Left: ",top_left_fiducial_number)
+top_left.save("./tmp/" + top_left_fiducial_number + ".png")
+
 top_right_fiducial_number = predict_fiducial(classify_model, "./tmp/top_right.png")
 print("Top Right: ", top_right_fiducial_number)
+top_right.save("./tmp/" + top_right_fiducial_number + ".png")
+
 bottom_left_fiducial_number = predict_fiducial(classify_model, "./tmp/bottom_left.png")
 print("Bottom Left: ", bottom_left_fiducial_number)
+bottom_left.save("./tmp/" + bottom_left_fiducial_number + ".png")
+
 bottom_right_fiducial_number = predict_fiducial(classify_model, "./tmp/bottom_right.png")
 print("Bottom Right: ", bottom_right_fiducial_number)
+bottom_right.save("./tmp/" + bottom_right_fiducial_number + ".png")
 
 #  get the coords
 print("Getting coords")
@@ -125,3 +135,20 @@ with open("midpoints.txt", "w") as f:
     f.write(f"Bottom Right: {real_bottom_right_coords} {bottom_right_fiducial_number}\n")
     f.write(f"Width: {width}\n")
     f.write(f"Height: {height}\n")
+
+# Read the pixel coordinates from the file
+# pixel_points = read_midpoints(file_path)
+pixel_points = np.array([real_top_left_coords, real_top_right_coords, real_bottom_left_coords, real_bottom_right_coords], dtype=np.float32)
+
+# Define the real-world coordinates of the points (in mm)
+real_points = np.array([
+    [78, 65],  # Top Left fiducial_2
+    [1225 - 90, 65],  # Top Right fiducial_1
+    [85, 723 - 87],  # Bottom Left fiducial_3
+    [1225 - 72, 723 - 70]  # Bottom Right fiducial_4
+], dtype=np.float32)
+
+# Compute the homography matrix
+homography_matrix, status = cv2.findHomography(pixel_points, real_points)
+
+np.savetxt('homography_matrix.csv', homography_matrix, delimiter=',')
