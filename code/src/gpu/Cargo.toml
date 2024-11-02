@@ -1,0 +1,9 @@
+[package]
+name = "gpu"
+version = "1.2.0"
+edition = "2021"
+
+[dependencies]
+ocl = "0.19"
+image = "0.24.8"
+tensorflow = { version = "0.21.0", features = ["tensorflow_gpu"] }

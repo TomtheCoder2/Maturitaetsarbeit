@@ -1,3 +1,4 @@
+use matura::compute_rl_coords::RLCompute;
 use std::f32::consts::PI;
 use std::fmt::format;
 use std::path::Path;
@@ -12,8 +13,9 @@ use cameleon::Camera;
 use eframe::Frame;
 use egui::Context;
 use egui::{ColorImage, TextureHandle};
+use matura::arduino_com::ArduinoCom;
 use matura::ball::BallComp;
-use matura::increment_last_number_in_filename;
+use matura::{arduino_com, increment_last_number_in_filename};
 
 use crate::Command::*;
 use egui::Color32;
@@ -28,6 +30,8 @@ pub enum Command {
     Start,
     Stop,
     Pause,
+    Reset,
+    ReloadRaw,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,11 +62,12 @@ pub struct App {
     #[serde(skip)]
     compute_rl_coords: matura::compute_rl_coords::RLCompute,
     #[serde(skip)]
-    arduino_com: matura::arduino_com::ArduinoCom,
-    #[serde(skip)]
     last_command: Instant,
     speed: i32,
     motor_pos: i32,
+    #[serde(skip)]
+    last_frame: Instant,
+    overlay_ball: bool,
 }
 
 impl Default for App {
@@ -86,10 +91,11 @@ impl Default for App {
             ball_comp: BallComp::default(),
             start_time: Instant::now(),
             compute_rl_coords: matura::compute_rl_coords::RLCompute::new(),
-            arduino_com: matura::arduino_com::ArduinoCom::new(),
             last_command: Instant::now(),
             speed: 100,
             motor_pos: 0,
+            last_frame: Instant::now(),
+            overlay_ball: true,
         }
     }
 }
@@ -144,6 +150,9 @@ impl eframe::App for App {
                     return;
                 }
             };
+            let comp_fps = 1./self.last_frame.elapsed().as_secs_f64();
+            self.last_frame = Instant::now();
+            ui.label(format!("Comp FPS: {:>5.0}", comp_fps));
             // println!(
             // "Image loaded: {}x{}",
             // buffer_undistorted.0, buffer_undistorted.1
@@ -161,29 +170,32 @@ impl eframe::App for App {
                     .unwrap(),
             );
 
-            let new_height = 700;
+            let new_height = image.height();
             let new_width =
                 (image.width() as f32 / image.height() as f32 * new_height as f32) as u32;
             let mut image =
                 image.resize(new_width, new_height, image::imageops::FilterType::Nearest);
+            let mut original_undistorted_image = image.clone();
+            let unmodified_original_undistorted_image = image.clone();
             let original_image = DynamicImage::ImageRgb8(
                 ImageBuffer::from_raw(width, height, buffer.to_vec()).unwrap(),
             );
+            let mut subtracted_image = image.clone();
             // subract self.raw_image from image
-            if self.overlay_raw_img {
+            // if self.overlay_raw_img {
                 let raw_image = &self.raw_image;
                 for x in 0..raw_image.width() {
                     for y in 0..raw_image.height() {
                         let raw_pixel = raw_image.pixels[y * raw_image.width() + x];
-                        if x >= image.width() as usize || y >= image.height() as usize {
-                            println!("Pixel out of bounds: {}x{}", x, y);
+                        if x >= subtracted_image.width() as usize || y >= subtracted_image.height() as usize {
+                            // println!("Pixel out of bounds: {}x{}", x, y);
                             continue;
                         }
-                        let image_pixel = image.get_pixel(x as u32, y as u32);
+                        let image_pixel = subtracted_image.get_pixel(x as u32, y as u32);
                         let r = image_pixel[0] as i32 - raw_pixel[0] as i32;
                         let g = image_pixel[1] as i32 - raw_pixel[1] as i32;
                         let b = image_pixel[2] as i32 - raw_pixel[2] as i32;
-                        image.put_pixel(
+                        subtracted_image.put_pixel(
                             x as u32,
                             y as u32,
                             image::Rgba([
@@ -195,10 +207,23 @@ impl eframe::App for App {
                         );
                     }
                 }
-            }
+            // }
             // dbg!();
             // let original_image =
             // original_image.resize(width, height, image::imageops::FilterType::Nearest);
+            if self.overlay_raw_img {
+                original_undistorted_image = subtracted_image.clone();
+                image = subtracted_image.clone();
+            }
+
+            let time = Instant::now().duration_since(self.start_time).as_secs_f32();
+            let ball = matura::ball::read_image_vis(&mut subtracted_image, &mut original_undistorted_image, &mut self.ball_comp, time);
+            // println!("ball: {:?}", ball);
+            // if !self.overlay_raw_img {
+            if self.overlay_ball {
+                image = original_undistorted_image;
+            }
+
             let height = image.height();
             let width = image.width();
             if self.paused {
@@ -216,39 +241,78 @@ impl eframe::App for App {
                     // pixel.2 = image::Rgba([255, 255, 255, gray]);
                 }
             }
-
-            let time = Instant::now().duration_since(self.start_time).as_secs_f32();
-            let ball = matura::ball::read_image_vis(&mut image, &mut self.ball_comp, time);
-            ui.label(format!(
-                "Ball: x: {:.2}, y: {:.2}, radius: {:.2}, velocity: x: {:.2}, y: {:.2}, magnitude: {:.2}",
-                ball.0, ball.1, ball.2, self.ball_comp.velocity.x, self.ball_comp.velocity.y, self.ball_comp.velocity.magnitude()
-            ));
+            // }
             // if let Some(pos) = self.arduino_com.try_receive_command() {
                 // if let com::commands::Command::Pos(p) = pos {
                     // self.motor_pos = p;
                 // }
             // }
-            ui.label(format!("Motor pos: {}", self.motor_pos));
+            // ui.label(format!("Motor pos: {}", self.motor_pos));
+            let mut player_final_pos = 0;
             // x = 102 is the player
-            if let Some(y_inercept) =  self.ball_comp.intersection_x(102.){
+            if let Some(y_inercept) = self.ball_comp.intersection_x(102.) {
                 let rl_y_intercept = self.compute_rl_coords.transform_point((y_inercept.x, y_inercept.y));
                 // y=0 for the player is at 450mm rl coords
                 let player_y = 450. - rl_y_intercept.1;
-                ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
-                    ui.label(format!("Player pos: y: {:.2}", player_y));});
-                if player_y > 5. && player_y < 140. && self.last_command.elapsed().as_secs_f32() > 0.1 {
+                // let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
+                // let player_y = 450. - ball_irl.1;
+                // ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
+                    // ui.label(format!("Player pos: y: {:.2}", player_y));});
+                if player_y > 5. && player_y < 140. && self.last_command.elapsed().as_secs_f32() > 0.001 {
                     // gear: diameter = 83mm, 200 steps per revolution, 1
                     // c
                     // 8° per step
-                    let rot = player_y / (PI * 64.) * 200.;
+                    // let rot = player_y / (PI * 64.) * 200.;
+                    let x = 1058.82 - 2.35 * rl_y_intercept.1;
                     // println!("pos: {player_y}");
                     // if rot < 30. {
                         // self.arduino_com.send_command(com::commands::Command::Reset(40));
                     // }
-                    self.arduino_com.send_stepper_motor_speed(self.speed);
-                    self.arduino_com.send_stepper_motor_pos(rot as i32);
-                    self.last_command = Instant::now();
+                    // self.arduino_com.send_stepper_motor_speed(self.speed);
+                    // self.arduino_com.send_stepper_motor_pos(rot as i32);
+                    // self.arduino_com.send_string(&format!("{}", x as i32));
+                    // self.last_command = Instant::now();
+                    player_final_pos = x as i32;
                 }
+            }
+            // motor, y
+            // 0   -> 450 mm
+            // 400 -> 280 mm
+            //
+            // 450 - y = 450 - 280 / 400 * x
+            // 450 - y = 170 / 400 * x
+            // 450 - y = 0.425 * x
+            // x = (450 - y) / 0.425
+            // x = 1058.82 - 2.35 * y
+            // y = 450 - 0.425 * x
+
+            let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
+            let player_y = 450. - ball_irl.1;
+            // ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
+                // ui.label(format!("Player pos: y: {:.2}", player_y));});
+            ui.horizontal(|ui| {
+                ui.label(format!(
+                    "Ball: x: {:.2}, y: {:.2}, radius: {:.2}, velocity: x: {:.2}, y: {:.2}, magnitude: {:.2}",
+                    ball.0, ball.1, ball.2, self.ball_comp.velocity.x, self.ball_comp.velocity.y, self.ball_comp.velocity.magnitude()
+                ));
+                ui.label(format!("Ball irl: x: {:.2}, y: {:.2}", ball_irl.0, ball_irl.1));
+                ui.label(format!("Player pos: y: {:.2}", player_y));
+            });
+            if player_y > 5. && player_y < 140. && self.last_command.elapsed().as_secs_f32() > 0.01 {
+                // gear: diameter = 83mm, 200 steps per revolution, 1
+                // c
+                // 8° per step
+                let rot = player_y / (PI * 64.) * 200.;
+                let x = 1058.82 - 2.35 * ball_irl.1;
+                player_final_pos = x as i32;
+                // println!("pos: {player_y}");
+                // if rot < 30. {
+                    // self.arduino_com.send_command(com::commands::Command::Reset(40));
+                // }
+                // self.arduino_com.send_stepper_motor_speed(self.speed);
+                // self.arduino_com.send_stepper_motor_pos(rot as i32);
+                // self.arduino_com.send_string(&format!("{}", player_final_pos));
+                // self.last_command = Instant::now();
             }
 
             let ci_image = ColorImage::from_rgb(
@@ -330,13 +394,16 @@ impl eframe::App for App {
                     }
                 }
                 if ui.button("Save Raw overlay").clicked() {
-                    save_img(image.clone(), "./raw.png".to_string());
+                    save_img(unmodified_original_undistorted_image.clone(), "./raw.png".to_string());
                     self.raw_image = load_raw();
+                    self.sender.send(ReloadRaw);
                 }
                     ui.label("Speed:");
                     ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
                     if ui.button("Reset").clicked() {
-                        self.arduino_com.send_command(com::commands::Command::Reset(0));
+                        // self.arduino_com.send_command(com::commands::Command::Reset(0));
+                        // self.arduino_com.send_string("R");
+                        self.sender.send(Reset).unwrap();
                     }
 
             });
@@ -353,6 +420,7 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.auto_exposure, "Auto Exposure");
                 ui.checkbox(&mut self.calibration_mode, "Calibration Mode");
                 ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
+                ui.checkbox(&mut self.overlay_ball, "Overlay Ball");
                 if self.calibration_mode {
                     ui.label("Calibration Image Interval: ");
                     ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
@@ -540,6 +608,16 @@ fn set_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String, val
     }
 }
 
+pub fn subtract_image(original: &mut [u8], other: &[u8]) {
+    assert_eq!(original.len(), other.len());
+    for i in 0..original.len() {
+        // todo avoid casting
+        original[i] = (original[i] as i32 - other[i] as i32).max(0).min(255) as u8;
+        // assert!(original[i] <= 255);
+        // assert!(original[i] >= 0);
+    }
+}
+
 fn main() {
     // Enumerates all cameras connected to the host.
     let mut cameras = cameleon::u3v::enumerate_cameras().unwrap();
@@ -597,6 +675,21 @@ fn main() {
         println!("old width: {}, old height: {}", width, height);
         println!("new width: {}, new height: {}", new_width, new_height);
         let precompute = matura::gen_table(width, height, new_width, new_height, min_x, min_y);
+        let rl_comp = matura::compute_rl_coords::RLCompute::new();
+
+        let raw = load_raw();
+        // we want to convert it to rgb from rgba, so we delete every 4th element
+        let raw_image = raw
+            .as_raw()
+            .to_vec()
+            .chunks(4)
+            .map(|x| x[0..3].to_vec())
+            .flatten()
+            .collect::<Vec<u8>>();
+        let raw_image = raw_image.as_slice();
+
+        let mut last_command = Instant::now();
+        let mut arduino_com = matura::arduino_com::ArduinoCom::new();
 
         let mut buffer = IMAGE_BUFFER_UNDISTORTED.lock().unwrap();
         buffer.0 = new_width;
@@ -604,6 +697,7 @@ fn main() {
         drop(buffer);
 
         let mut undistorted_image = vec![0u8; (new_width * new_height * 3) as usize];
+        let mut ball_comp = BallComp::new();
 
         loop {
             if let Ok(message) = rx.try_recv() {
@@ -617,8 +711,22 @@ fn main() {
                     Pause => {
                         paused = true;
                     }
+                    Reset => {
+                        arduino_com.send_string("R");
+                    }
                     Stop => {
                         break;
+                    }
+                    ReloadRaw => {
+                        let raw = load_raw();
+                        let raw_image = raw
+                            .as_raw()
+                            .to_vec()
+                            .chunks(4)
+                            .map(|x| x[0..3].to_vec())
+                            .flatten()
+                            .collect::<Vec<u8>>();
+                        let raw_image = raw_image.as_slice();
                     }
                     _ => {
                         println!("Unknown command: {:?}", message);
@@ -678,7 +786,69 @@ fn main() {
                         new_width,
                         new_height,
                     );
-                    if frame_counter % 10 == 0 {
+                    let undistorted_clone = undistorted_image.clone();
+                    let ball_comp_t0 = std::time::Instant::now();
+                    subtract_image(&mut undistorted_image, raw_image);
+                    // let u_image = DynamicImage::ImageRgb8(
+                    // ImageBuffer::from_raw(new_width, new_height, undistorted_image.clone())
+                    // .unwrap(),
+                    // );
+                    // u_image.save("undistorted_image.png");
+                    // println!("subtracted image: {:?}", undistorted_image);
+                    // std::process::exit(0);
+                    let ball = matura::ball::find_ball(
+                        undistorted_image.as_slice(),
+                        new_width as u32,
+                        new_height as u32,
+                        &mut ball_comp,
+                        elapsed.as_secs_f32(),
+                    );
+                    let elapsed_ball_comp = ball_comp_t0.elapsed();
+                    // println!(
+                    // "ball_comp: {:.2}ms",
+                    // elapsed_ball_comp.as_secs_f32() * 1000.0
+                    // );
+                    fn move_y(
+                        x: f32,
+                        o_y: f32,
+                        arduino_com: &mut ArduinoCom,
+                        last_command: &mut Instant,
+                        rl_comp: &RLCompute,
+                    ) {
+                        let y = rl_comp.transform_point((x, o_y)).1;
+                        // println!("oy: {o_y}, y: {y}, 450 - y: {}", 450. - y);
+                        if 450. - y > 5.
+                            && 450. - y < 140.
+                            && last_command.elapsed().as_secs_f32() > 0.1
+                        {
+                            let x = 1058.82 - 2.35 * y;
+                            // println!("sending: y: {y}");
+                            arduino_com.send_string(&format!("{}", x as i32));
+                            *last_command = Instant::now();
+                        }
+                    }
+                    if ball_comp.velocity.x > 0.0 && ball_comp.velocity.magnitude() > 20. {
+                        // the ball goes towards the goal
+                        let intersection = ball_comp.intersection_x(30.);
+                        if let Some(intersection) = intersection {
+                            // println!("intersection: {:?}", intersection);
+                            // move_y(
+                            //     intersection.x,
+                            //     intersection.y,
+                            //     &mut arduino_com,
+                            //     &mut last_command,
+                            //     &rl_comp,
+                            // );
+                        }
+                    }
+                    move_y(
+                        ball.0 as f32,
+                        ball.1 as f32,
+                        &mut arduino_com,
+                        &mut last_command,
+                        &rl_comp,
+                    );
+                    if frame_counter % 1 == 0 {
                         // save to IMAGE_BUFFER
                         let mut buffer = IMAGE_BUFFER.lock().unwrap();
                         buffer.clear();
@@ -687,7 +857,7 @@ fn main() {
 
                         let mut buffer = IMAGE_BUFFER_UNDISTORTED.lock().unwrap();
                         buffer.2.clear();
-                        buffer.2.extend_from_slice(&undistorted_image);
+                        buffer.2.extend_from_slice(&undistorted_clone);
                     }
                 }
             }

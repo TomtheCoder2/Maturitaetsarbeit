@@ -2,6 +2,9 @@ import tensorflow as tf
 from tensorflow.keras.preprocessing import image
 import numpy as np
 import os
+import time
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 # Load the saved model
 model = tf.keras.models.load_model('fiducial_classifier_model.keras')
@@ -14,6 +17,7 @@ def predict_fiducial(image_path):
 
     # Load and preprocess the image
     img = image.load_img(image_path, target_size=(img_height, img_width))
+    start = time.time()
     img_array = image.img_to_array(img)
     img_array = np.expand_dims(img_array, axis=0)  # Add a batch dimension
     # img_array = img_array / 255.0  # Normalize as done in training
@@ -21,6 +25,8 @@ def predict_fiducial(image_path):
     # Make predictions
     predictions = model.predict(img_array)
     predicted_class = np.argmax(predictions, axis=1)
+    end = time.time()
+    print(f"Prediction time: {end - start:.2f}s")
 
     # Class labels (assuming 0 for fiducial_1, 1 for fiducial_2, etc.)
     class_labels = ['fiducial_1', 'fiducial_2', 'fiducial_3', 'fiducial_4']
