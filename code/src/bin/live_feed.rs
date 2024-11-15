@@ -1,13 +1,11 @@
 use matura::compute_rl_coords::RLCompute;
 use std::f32::consts::PI;
-use std::fmt::format;
-use std::path::Path;
+use std::sync::atomic::AtomicI32;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Mutex};
 use std::thread;
 use std::time::Instant;
 
-use cameleon::genapi::NodeStore;
 use cameleon::u3v::{ControlHandle, StreamHandle};
 use cameleon::Camera;
 use eframe::Frame;
@@ -15,14 +13,12 @@ use egui::Context;
 use egui::{ColorImage, TextureHandle};
 use matura::arduino_com::ArduinoCom;
 use matura::ball::BallComp;
-use matura::{arduino_com, increment_last_number_in_filename};
+use matura::increment_last_number_in_filename;
+use std::sync::atomic::Ordering;
 
 use crate::Command::*;
-use egui::Color32;
-use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, RgbImage};
-use matura::undistort_image;
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer};
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::Ordering;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Command {
@@ -68,6 +64,7 @@ pub struct App {
     #[serde(skip)]
     last_frame: Instant,
     overlay_ball: bool,
+    show_player_predicition: bool,
 }
 
 impl Default for App {
@@ -96,6 +93,7 @@ impl Default for App {
             motor_pos: 0,
             last_frame: Instant::now(),
             overlay_ball: true,
+            show_player_predicition: true,
         }
     }
 }
@@ -150,9 +148,11 @@ impl eframe::App for App {
                     return;
                 }
             };
+            let actual_player_pos = ACTUAL_PLAYER_POSITION.lock().unwrap().clone();
             let comp_fps = 1./self.last_frame.elapsed().as_secs_f64();
             self.last_frame = Instant::now();
-            ui.label(format!("Comp FPS: {:>5.0}", comp_fps));
+            let player_detection_fps = PLAYER_DETECTION_FPS.load(Ordering::Relaxed);
+            ui.label(format!("Comp FPS: {:>5.0}, actual player pos: {}:{}, player detection fps: {}", comp_fps, actual_player_pos.0, actual_player_pos.1, player_detection_fps));
             // println!(
             // "Image loaded: {}x{}",
             // buffer_undistorted.0, buffer_undistorted.1
@@ -173,8 +173,8 @@ impl eframe::App for App {
             let new_height = image.height();
             let new_width =
                 (image.width() as f32 / image.height() as f32 * new_height as f32) as u32;
-            let mut image =
-                image.resize(new_width, new_height, image::imageops::FilterType::Nearest);
+            // let mut image =
+                // image.resize(new_width, new_height, image::imageops::FilterType::Nearest);
             let mut original_undistorted_image = image.clone();
             let unmodified_original_undistorted_image = image.clone();
             let original_image = DynamicImage::ImageRgb8(
@@ -315,6 +315,14 @@ impl eframe::App for App {
                 // self.last_command = Instant::now();
             }
 
+            if self.show_player_predicition {
+                matura::ball::draw_circle(&mut image, 100, actual_player_pos.1, 5., [255,0 ,0 , 255]);
+                // draw the line y = actual_player_pos.1
+                for x in 0..image.width() {
+                    image.put_pixel(x, actual_player_pos.1 as u32, image::Rgba([255, 0, 0, 255]));
+                }
+            }
+
             let ci_image = ColorImage::from_rgb(
                 [image.width() as usize, image.height() as usize],
                 image.as_bytes(),
@@ -421,6 +429,7 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.calibration_mode, "Calibration Mode");
                 ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
                 ui.checkbox(&mut self.overlay_ball, "Overlay Ball");
+                ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
                 if self.calibration_mode {
                     ui.label("Calibration Image Interval: ");
                     ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
@@ -652,8 +661,11 @@ fn main() {
     let mut payload_rx = camera.start_streaming(3).unwrap();
     let (tx, rx): (Sender<Command>, Receiver<Command>) = mpsc::channel();
 
+    let t0_first_thread = std::time::Instant::now();
+    let t0_second_thread = std::time::Instant::now();
+
     thread::spawn(move || {
-        let mut t0 = std::time::Instant::now();
+        let t0 = t0_first_thread;
         let mut t0_delta = std::time::Instant::now();
         let mut frame_counter = 0;
         let mut last_fps = [0.0; 100];
@@ -686,7 +698,7 @@ fn main() {
             .map(|x| x[0..3].to_vec())
             .flatten()
             .collect::<Vec<u8>>();
-        let raw_image = raw_image.as_slice();
+        let mut raw_image = raw_image.as_slice();
 
         let mut last_command = Instant::now();
         let mut arduino_com = matura::arduino_com::ArduinoCom::new();
@@ -719,14 +731,15 @@ fn main() {
                     }
                     ReloadRaw => {
                         let raw = load_raw();
-                        let raw_image = raw
+                        let raw_image1 = raw
                             .as_raw()
                             .to_vec()
                             .chunks(4)
                             .map(|x| x[0..3].to_vec())
                             .flatten()
                             .collect::<Vec<u8>>();
-                        let raw_image = raw_image.as_slice();
+                        let raw_image1 = raw_image1.as_slice();
+                        // raw_image = raw_image1.clone();
                     }
                     _ => {
                         println!("Unknown command: {:?}", message);
@@ -764,6 +777,9 @@ fn main() {
             //     payload.id(),
             //     payload.timestamp()
             // );
+            let mut player_0 = 0;
+            let mut player_target = 0;
+            let mut current_player_pos = 0;
             if let Some(image_info) = payload.image_info() {
                 // println!("{:?}\n", image_info);
                 let width = image_info.width;
@@ -808,14 +824,39 @@ fn main() {
                     // "ball_comp: {:.2}ms",
                     // elapsed_ball_comp.as_secs_f32() * 1000.0
                     // );
+                    player_target = ball.1 as i32;
+                    let actual_player_pos = ACTUAL_PLAYER_POSITION.lock().unwrap().clone();
+                    if !actual_player_pos.3
+                        // && actual_player_pos.0 != 0
+                        && actual_player_pos.1 != 0
+                        && player_target != 0
+                        && last_command.elapsed().as_secs_f32() > 0.1
+                        && player_target as f32 > 236.
+                        && (player_target as f32) < 345.
+                    {
+                        // so we know that the player is currently at actual_player_pos, but it thinks its at player_target
+                        // example: ball: 450, actual: 400, target: 450 -> player_0 = 50
+                        player_0 = player_target - actual_player_pos.1 as i32;
+                        current_player_pos = actual_player_pos.1;
+                        let mov =
+                            ((player_target - actual_player_pos.1 as i32) as f32 * 2.35) as i32;
+                        println!("corrected position 0: actual_player_pos: {:?}, player_target: {}, player_0: {}, mov: {}", actual_player_pos, player_target, player_0, mov);
+                        ACTUAL_PLAYER_POSITION.lock().unwrap().3 = true;
+                        arduino_com.send_string(&format!("{}", -mov as i32));
+                        last_command = Instant::now();
+                    }
+
                     fn move_y(
                         x: f32,
                         o_y: f32,
                         arduino_com: &mut ArduinoCom,
                         last_command: &mut Instant,
                         rl_comp: &RLCompute,
+                        player_0: i32,
+                        player_target: &mut i32,
                     ) {
-                        let y = rl_comp.transform_point((x, o_y)).1;
+                        *player_target = o_y as i32;
+                        let y = rl_comp.transform_point((x, o_y)).1 + player_0 as f32;
                         // println!("oy: {o_y}, y: {y}, 450 - y: {}", 450. - y);
                         if 450. - y > 5.
                             && 450. - y < 140.
@@ -827,27 +868,29 @@ fn main() {
                             *last_command = Instant::now();
                         }
                     }
-                    if ball_comp.velocity.x > 0.0 && ball_comp.velocity.magnitude() > 20. {
+                    if ball_comp.velocity.x < 0.0 && ball_comp.velocity.magnitude() > 20. {
                         // the ball goes towards the goal
                         let intersection = ball_comp.intersection_x(30.);
                         if let Some(intersection) = intersection {
                             // println!("intersection: {:?}", intersection);
                             // move_y(
-                            //     intersection.x,
-                            //     intersection.y,
-                            //     &mut arduino_com,
-                            //     &mut last_command,
-                            //     &rl_comp,
+                            // intersection.x,
+                            // intersection.y,
+                            // &mut arduino_com,
+                            // &mut last_command,
+                            // &rl_comp,
                             // );
                         }
                     }
-                    move_y(
-                        ball.0 as f32,
-                        ball.1 as f32,
-                        &mut arduino_com,
-                        &mut last_command,
-                        &rl_comp,
-                    );
+                    // move_y(
+                    //     ball.0 as f32,
+                    //     ball.1 as f32,
+                    //     &mut arduino_com,
+                    //     &mut last_command,
+                    //     &rl_comp,
+                    //     player_0,
+                    //     &mut player_target,
+                    // );
                     if frame_counter % 1 == 0 {
                         // save to IMAGE_BUFFER
                         let mut buffer = IMAGE_BUFFER.lock().unwrap();
@@ -864,5 +907,75 @@ fn main() {
         }
     });
 
+    thread::spawn(move || {
+        let t0 = t0_second_thread;
+        // this thread will poll the image all the time and check where the player is and save it to ACTUAL_PLAYER_POSITION
+        let mut python_script = matura::detect_player::PythonScript::new();
+        println!("Initialized python script");
+        let mut last_t = Instant::now();
+        loop {
+            let t = Instant::now();
+            let time = t0.elapsed().as_secs_f32();
+            let buffer = { IMAGE_BUFFER_UNDISTORTED.lock().unwrap().clone() };
+            let image = buffer.2;
+            let width = buffer.0;
+            let height = buffer.1;
+            // convert the image to a DynamicImage
+            let mut img = image::DynamicImage::ImageRgb8(
+                image::ImageBuffer::from_raw(width as u32, height as u32, image.clone()).unwrap(),
+            );
+            for i in 0..width as usize * height as usize {
+                let r = image[i * 3];
+                let g = image[i * 3 + 1];
+                let b = image[i * 3 + 2];
+                img.put_pixel(
+                    i as u32 % width as u32,
+                    i as u32 / width as u32,
+                    image::Rgba([r, g, b, 100]),
+                );
+            }
+            // Get the dimensions of the image
+            let (width, height) = img.dimensions();
+
+            // Calculate the width of each slice
+            let slice_width = width / 7;
+
+            // Crop the left-most slice
+            let left_slice = img.crop(
+                0,
+                (1. / 3. * height as f32) as u32,
+                slice_width,
+                (1. / 3. * height as f32) as u32,
+            );
+            let img = left_slice.resize_exact(128, 128, image::imageops::FilterType::Nearest);
+            // get player position
+            let values = img
+                .to_rgb8()
+                .into_raw()
+                .iter()
+                .map(|&v| v as u8)
+                .collect::<Vec<u8>>();
+            assert_eq!(values.len(), 128 * 128 * 3);
+            // println!("prep: {:?}", t.elapsed());
+            let player_position = python_script.detect_player(&values);
+            let t = Instant::now();
+            ACTUAL_PLAYER_POSITION.lock().unwrap().0 = player_position.0;
+            ACTUAL_PLAYER_POSITION.lock().unwrap().1 =
+                player_position.1 + (1. / 3. * height as f32) as u32;
+            ACTUAL_PLAYER_POSITION.lock().unwrap().2 = time;
+            ACTUAL_PLAYER_POSITION.lock().unwrap().3 = false;
+            // println!("after: {:?}", t.elapsed());
+            PLAYER_DETECTION_FPS.store(
+                (1. / last_t.elapsed().as_secs_f32()) as i32,
+                Ordering::Relaxed,
+            );
+            last_t = Instant::now();
+        }
+    });
+
     run_camera_test(tx);
 }
+
+// x, y, time, used
+pub static ACTUAL_PLAYER_POSITION: Mutex<(u32, u32, f32, bool)> = Mutex::new((0, 0, 0., false));
+pub static PLAYER_DETECTION_FPS: AtomicI32 = AtomicI32::new(0);

@@ -1,9 +1,22 @@
 use image::io::Reader as ImageReader;
 use image::Pixel;
-use image::{GenericImageView, ImageBuffer, Rgba};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer};
+use image::{RgbImage, Rgba};
 use matura::ball::Vec2;
 use matura::debug;
 use std::fmt::{Display, Formatter};
+use std::fs;
+use std::path::Path;
+
+pub fn subtract_image(original: &mut [u8], other: &[u8]) {
+    assert_eq!(original.len(), other.len());
+    for i in 0..original.len() {
+        // todo avoid casting
+        original[i] = (original[i] as i32 - other[i] as i32).max(0).min(255) as u8;
+        // assert!(original[i] <= 255);
+        // assert!(original[i] >= 0);
+    }
+}
 
 fn main() {
     // let args: Vec<String> = std::env::args().collect();
@@ -17,7 +30,7 @@ fn main() {
     // };
     let t1 = std::time::Instant::now();
     // list all the files in a directory
-    let dir = std::fs::read_dir("./recording_2024-10-26_21-36-54").unwrap();
+    let dir = std::fs::read_dir("./recording_2024-11-05_19-01-50").unwrap();
     let out_dir = "output";
     let mut all_balls = Vec::new();
     let mut file_count = 0;
@@ -45,6 +58,10 @@ fn main() {
     });
     files.sort_by(|a, b| a.0.cmp(&b.0));
     let mut time = 0.;
+    let raw_image = ImageReader::open("raw.png").unwrap().decode().unwrap();
+
+    let raw_image = raw_image.into_rgb8();
+    let raw_image = raw_image.as_raw();
     for (_, file_name) in files {
         // // let file_name = file.unwrap().path().to_str().unwrap().to_string();
         // // println!("file: {}", file_name);
@@ -114,21 +131,58 @@ fn main() {
             .unwrap()
             .decode()
             .unwrap();
+        let width = img.width();
+        let height = img.height();
         let mut buffed_image = ImageBuffer::new(img.width(), img.height());
         for (x, y, pixel) in img.pixels() {
             buffed_image.put_pixel(x, y, pixel);
         }
-        let ball = matura::ball::read_image_vis(&mut buffed_image, &mut ball_comp, time);
-        all_balls.push(ball);
-        // save to file
-        let out_file = format!(
-            "{}/{}",
-            out_dir,
-            file_name.split("\\").last().unwrap().replace("png", "jpg")
-        );
-        debug!("out_file: {}", out_file);
-        buffed_image.save(out_file).unwrap();
+        // // save to file
+        // let out_file = format!(
+        //     "{}/{}",
+        //     out_dir,
+        //     file_name.split("\\").last().unwrap().replace("png", "jpg")
+        // );
+        // debug!("out_file: {}", out_file);
+        // buffed_image.save(out_file).unwrap();
         time += 1. / 149.;
+
+        let img = img.to_rgb8();
+        let mut img = img.as_raw().clone();
+        let img = img.as_mut_slice();
+        subtract_image(img, &raw_image);
+        let ball = matura::ball::find_ball(img, width, height, &mut ball_comp, time);
+        all_balls.push(ball);
+        let img = DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, img.to_vec()).unwrap());
+        let out_file = file_name.replace("recording", "recording_sub");
+        // check if directory exists, if not create it
+        let dir_name = out_file.split("\\").collect::<Vec<&str>>()
+            [0..out_file.split("\\").collect::<Vec<&str>>().len() - 1]
+            .join("\\");
+        if !Path::new(&dir_name).exists() {
+            fs::create_dir_all(&dir_name).unwrap();
+        }
+
+        // if ball not (-1, -1, ..) aka not found we want to keep the file name, if the ball was found, the file name should be the same as the ball coordinates (without the third value)
+        if ball.0 != -1 {
+            let out_file = format!(
+                "{}/{}",
+                out_file.split("\\").collect::<Vec<&str>>()
+                    [0..out_file.split("\\").collect::<Vec<&str>>().len() - 1]
+                    .join("\\"),
+                format!(
+                    "{}_{}_{}",
+                    ball.0,
+                    ball.1,
+                    out_file.split("\\").last().unwrap()
+                )
+            );
+            debug!("out_file: {}", out_file);
+            img.save(out_file).unwrap();
+        } else {
+            debug!("out_file: {}", out_file);
+            img.save(out_file).unwrap();
+        }
     }
     for ball in all_balls.iter() {
         // for ball in balls.iter() {

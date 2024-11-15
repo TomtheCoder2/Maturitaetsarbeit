@@ -2,10 +2,10 @@
 The software has the task to gather the image information from the camera, detecting the ball, predicting where it will go in the future and controlling the motors to either stop or shoot the ball.
 This task can be split into the following chapters:
 \begin{itemize}
-    \item \textbf{Optics}: Correcting for Lens distortion and converting the pixel coordinates to real world coordinates
+    \item \textbf{Optics}: Correcting for lens distortion and converting the pixel coordinates to real world coordinates
     \item \textbf{Ball Detection}: Detecting the ball in the image
     \item \textbf{Prediction}: Predicting the ball movement
-    \item \textbf{Controlling the motors}: Finally, we move the motors to the correct position
+    \item \textbf{Controlling the motors}: Finally, moving the motors to the correct position
 \end{itemize}
 
 
@@ -32,19 +32,19 @@ The Formulas for this are:
 \begin{itemize}
     \item \textbf{Radial distortion:} This is the distortion that makes straight lines appear curved:
     \begin{gather*}
-        r^2 = x^2 + y^2\\
+        R^2 = x^2 + y^2\\
         x_{\text{radial}} = x(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
         y_{\text{radial}} = y(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
     \end{gather*}
     \item \textbf{Tangential distortion:} This distortion occurs because the lens and the image sensor are not perfectly parallel.
     \begin{gather*}
-        x_{\text{tangential}} = 2p_1 xy + p_2(r^2 + 2x^2)\\
+        X_{\text{tangential}} = 2p_1 xy + p_2(r^2 + 2x^2)\\
         y_{\text{tangential}} = p_1(r^2 + 2y^2) + 2p_2 xy\\
     \end{gather*}
 \end{itemize}
 Together that gives:
 \begin{gather*}
-    x' = x_{\text{radial}} + x_{\text{tangential}}\\
+    X' = x_{\text{radial}} + x_{\text{tangential}}\\
     y' = y_{\text{radial}} + y_{\text{tangential}}\\
 \end{gather*}
 Finally, the undistorted pixel positions are transformed back to image coordinates using the camera matrix \( K \):
@@ -61,14 +61,14 @@ Finally, the undistorted pixel positions are transformed back to image coordinat
         1
     \end{bmatrix}
 \]
-where $K$ is the camera matrix:
+Where $K$ is the camera matrix:
 \begin{center}
     K = \begin{bmatrix}
             f_x & 0   & c_x \\
             0   & f_y & c_y \\
             0   & 0   & 1
     \end{bmatrix}\\
-    where:
+    Where:
 \end{center}
 \begin{itemize}
     \item $f_x$ and $f_y$ are the focal lengths along the x and y axes (in pixels),
@@ -172,7 +172,7 @@ This generates a long vector with the corresponding index for each pixel in the 
 (Note that these are indices because the image is flattened to a vector of length $3 \cdot \text{width} \cdot \text{height}$, where each pixel has 3 values for the RGB channels.)
 
 Using the table is as simple as just looking up the index for the pixel in the undistorted image and copying the pixel values from the original image to the new image.
-This function is called for each frame and the result is a corrected image with no distortion.
+This function is called for each frame, and the result is a corrected image with no distortion.
 The Code can be seen here:
 \begin{lstlisting}[language=rust,breaklines,label={lst:undistort_image_table}]
 /// Undistort an image using the precomputed table.
@@ -356,12 +356,14 @@ The structure of the CNNs can be seen here:
     \label{fig:CNN_structure}
 \end{figure}
 An interesting way to visualize the way the CNN works is to use gradcam to visualize the gradient of the image, which corresponds to the parts of the image the CNN is looking at.
+Grad-Cam is an algorithm to create a saliency map for the CNN, this can be seen here:
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{../photos/gradcam_combined_image}
     \caption[cnn-gradcam]{Gradcam of the different layers (using another CNN which was trained to do the same task)}
     \label{fig:gradcam_combined_image}
-\end{figure}
+\end{figure}\\
+There is always first the name of the layer as a title then the heat map alone on the left and on the right there is an overlay of the original image and the heat map.
 
 % Todo add stats about the real world training/tests
 \todo{Todo add stats about the real world training/tests}
@@ -369,9 +371,9 @@ An interesting way to visualize the way the CNN works is to use gradcam to visua
 
 \section{Ball Detection}\label{sec:ball-detection}
 The ball detection is a crucial part of the software, because if the ball is not detected correctly, the whole system will not work.
-To detect ball an image is taken without the ball present and then the image with the ball is subtracted from the image without the ball, so that only the ball remains in the image.
+To detect the ball an image is taken without the ball present and then the image with the ball is subtracted from the image without the ball, so that only the ball remains in the image.
 But a problem that arises is that also other things that change are detected, like people moving or the table moving.
-Luckily the glass table is so reflective and the light from the bottom is strong enough that the people behind the glass table have a low contrast in the image, so they are not detected.
+Luckily the glass table is very reflective and the light from the bottom is strong enough that the people behind the glass table have a low contrast in the image, so they are not detected.
 To detect the ball I just filter out the white pixels in the image, because the ball is white.
 The ball detection can be seen here:
 \begin{figure}[H]
@@ -382,6 +384,7 @@ The ball detection can be seen here:
 \end{figure}
 But having the pixel coordinates is not very useful, so we have to convert the pixel coordinates to real-world coordinates.
 To compute the real world coordinates we compare the pixel coordinates of the ball to the pixel coordinates of the fiducials.
+We need the real world coordinates to move the motors to the correct position as it is possible that the camera moves or the table moves, so the pixel coordinates are not reliable.
 I measured the distance between the walls and the fiducials and made a coordinate system so that the fiducial with the number 2 lies in the top left corner (0,0) and the other fiducials are placed accordingly.
 Then to compute the real world coordinates I use a homography matrix to transform the pixel coordinates to real world coordinates.
 \section*{Homography Calculation}
@@ -391,7 +394,7 @@ The transformation is defined as:
 
 \begin{equation}
     \begin{bmatrix}
-        x' \\
+        X' \\
         y' \\
         1
     \end{bmatrix}
@@ -420,17 +423,18 @@ In Python, we compute \( H \) using the $cv2.findHomography$ function:
     H, \text{\_} = \text{cv2.findHomography}(\text{pixel\_points}, \text{real\_points})
 \]
 % todo: should i explain how the homography matrix is calculated?
-\todo{Should i explain how the homography matrix is calculated?}
+%\todo{Should i explain how the homography matrix is calculated?}
+The homography matrix can be calculated using some basic linear algebra that can be found here~\autocite{homography}.
 
 In Rust, this matrix is applied to new pixel points via matrix multiplication and normalization.
 % todo: should i explain that i save the stuff a file and then read it to save time?
 
 
 \section{Prediction}\label{sec:prediction}
-To predict where the ball will go in the future I use a simple linear regression model.
-But first I have to check whether the ball is still flying into the same direction and with the same velocity.
-This is done by using the last position and computing the current position with the current velocity.
-If the difference between the prediction and the the real world position is too large then I delete the positions and start over.
+To predict where the ball will go in the future I use a simple linear regression\autocite{linear_regression} model.
+But first, I have to check whether the ball is still rolling into the same direction and with the same velocity.
+This is done by using the last position and computing the current position with the current velocity, which was calculated by the last two positions.
+If the difference between the prediction and the real world position is too large then I delete the positions and start over.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.9\textwidth]{../photos/ball_prediction}
@@ -439,14 +443,14 @@ If the difference between the prediction and the the real world position is too 
 \end{figure}
 
 % todo: should i explain the linear regression model and the linear algebra behind it?
-\todo{Should i explain the linear regression model and the linear algebra behind it?}
-To find out where the ball will end up when it reaches the goalkepper (or any player), I can just compute the intersection between the line of the ball and the line of the goalkepper.
-The line of the ball can be computed with the current position $\vec{r}$, the current velocity $\vec{v}$ and the player's $x$ coordinate.
+%\todo{Should i explain the linear regression model and the linear algebra behind it?}
+To find out where the ball will end up when it reaches the goalkeeper (or any player), I can just compute the intersection between the line of the ball and the line of the goalkeeper.
+The line of the ball can be computed with the current position $\vec{r}$, the current velocity $\vec{v}$ and the player's $p_x$ coordinate.
 \begin{equation}
     \begin{split}
         \vec{r} &= \begin{bmatrix}
-                       x \\
-                       y
+                       r_x \\
+                       r_y
         \end{bmatrix}\\
         \vec{v} &= \begin{bmatrix}
                        v_x \\
@@ -454,7 +458,7 @@ The line of the ball can be computed with the current position $\vec{r}$, the cu
         \end{bmatrix}\\
 %    let t = (x - self.position.x) / self.velocity.x;
 %        Some(self.position + self.velocity * t)
-        t &= \frac{x - r_x}{v_x}\\
+        T &= \frac{p_x - r_x}{v_x}\\
         \vec{r}_\text{intersection} &= \vec{r} + \vec{v} \cdot t
     \end{split}\label{eq:ball_intersection}
 \end{equation}
@@ -466,7 +470,7 @@ To control the motors I use an Arduino Mega 2560, because it has enough pins to 
 The Arduino is connected to the computer via USB, and the computer sends the motor positions to the Arduino via serial communication.
 
 \subsubsection{Controlling the DC-Motor}\label{subsubsec:controlling-the-dc-motor}
-The DC-Motor is controlled by the stepper motor driver L298N as seen here\ref{ch:electronics}.
+The DC-Motor is controlled by the stepper motor driver L298N as seen in Chapter~\ref{ch:electronics}.
 
 
 
