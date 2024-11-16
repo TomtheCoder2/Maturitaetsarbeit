@@ -839,13 +839,17 @@ fn main() {
                         player_0 = player_target - actual_player_pos.1 as i32;
                         current_player_pos = actual_player_pos.1;
                         let mov =
-                            ((player_target - actual_player_pos.1 as i32) as f32 * 2.35) as i32;
-                        println!("corrected position 0: actual_player_pos: {:?}, player_target: {}, player_0: {}, mov: {}", actual_player_pos, player_target, player_0, mov);
+                            ((player_target - actual_player_pos.1 as i32) as f32 * 2.35) as i32 / 3;
+                        // println!("corrected position 0: actual_player_pos: {:?}, player_target: {}, player_0: {}, mov: {}", actual_player_pos, player_target, player_0, mov);
                         ACTUAL_PLAYER_POSITION.lock().unwrap().3 = true;
-                        arduino_com.send_string(&format!("{}", -mov as i32));
-                        last_command = Instant::now();
+                        // arduino_com.send_string(&format!("{}", -mov as i32));
+                        // last_command = Instant::now();
                     }
 
+                    const MIN_MOTOR: i32 = 0;
+                    const MAX_MOTOR: i32 = 330;
+                    const MIN_PIXEL: i32 = 226;
+                    const MAX_PIXEL: i32 = 350;
                     fn move_y(
                         x: f32,
                         o_y: f32,
@@ -856,31 +860,74 @@ fn main() {
                         player_target: &mut i32,
                     ) {
                         *player_target = o_y as i32;
-                        let y = rl_comp.transform_point((x, o_y)).1 + player_0 as f32;
+                        // let y = rl_comp.transform_point((x, o_y)).1 + player_0 as f32;
+                        let y = o_y;
                         // println!("oy: {o_y}, y: {y}, 450 - y: {}", 450. - y);
-                        if 450. - y > 5.
-                            && 450. - y < 140.
-                            && last_command.elapsed().as_secs_f32() > 0.1
+                        //
+                        // motor, pixel y
+                        // 0,   350
+                        // 330, 226
+                        //
+                        // pixel y, motor
+                        // 226, 330
+                        // 350, 0
+                        //
+                        // A(226, 330) B(350, 0)
+                        // y = mx + b
+                        // m = (y2 - y1) / (x2 - x1)
+                        // b = y1 - m * x1
+                        // m = (0 - 330) / (350 - 226) = -330 / 124 = -2.6612903226
+                        // b = 330 - (-2.66 * 226) = 330 + 600.76 = 931.4516129076
+                        // y = -2.66 * x + 930.76
+                        // motor = y - 350
+                        if y > MIN_PIXEL as f32
+                            && y < MAX_PIXEL as f32
+                            && last_command.elapsed().as_secs_f32() > 0.001
                         {
-                            let x = 1058.82 - 2.35 * y;
+                            // convert from pixel y to motor
+                            let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
+                            let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
+                            let x = m * y + b;
                             // println!("sending: y: {y}");
                             arduino_com.send_string(&format!("{}", x as i32));
                             *last_command = Instant::now();
                         }
+                    }
+                    fn move_center(
+                        arduino_com: &mut ArduinoCom,
+                        last_command: &mut Instant,
+                        player_0: i32,
+                    ) {
+                        let y = (MIN_PIXEL + MAX_PIXEL) as f32 / 2.;
+                        move_y(
+                            0.,
+                            y,
+                            arduino_com,
+                            last_command,
+                            &RLCompute::new(),
+                            player_0,
+                            &mut 0,
+                        );
                     }
                     if ball_comp.velocity.x < 0.0 && ball_comp.velocity.magnitude() > 20. {
                         // the ball goes towards the goal
                         let intersection = ball_comp.intersection_x(30.);
                         if let Some(intersection) = intersection {
                             // println!("intersection: {:?}", intersection);
-                            // move_y(
-                            // intersection.x,
-                            // intersection.y,
-                            // &mut arduino_com,
-                            // &mut last_command,
-                            // &rl_comp,
-                            // );
+                            move_y(
+                                intersection.x,
+                                intersection.y,
+                                &mut arduino_com,
+                                &mut last_command,
+                                &rl_comp,
+                                player_0,
+                                &mut player_target,
+                            );
+                        } else {
+                            move_center(&mut arduino_com, &mut last_command, player_0)
                         }
+                    } else {
+                        move_center(&mut arduino_com, &mut last_command, player_0)
                     }
                     // move_y(
                     //     ball.0 as f32,
@@ -888,7 +935,7 @@ fn main() {
                     //     &mut arduino_com,
                     //     &mut last_command,
                     //     &rl_comp,
-                    //     player_0,
+                    //     0,
                     //     &mut player_target,
                     // );
                     if frame_counter % 1 == 0 {

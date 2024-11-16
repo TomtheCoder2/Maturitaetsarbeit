@@ -60,11 +60,11 @@ A render of the turning mechanism can be seen here:
 \noindent
 \begin{tikzpicture}[H]
     \node [anchor=west, text width=2cm] (motor) at (-1,5) {\Large Motor \small \textbf{(Pololu)}};
-    \node [anchor=east, text width=3cm] (holder) at (18.5,5) {\Large Holder \small connects the motor to the wall of the table};
-    \node [anchor=east, text width=3cm] (main-tube) at (18.5,7.2) {\Large Main tube \small connected to the player};
     \node [anchor=east, text width=3cm] (larger-tube) at (18.5,9) {\Large Larger tube \small connected to the motor};
-    \node [anchor=east, text width=3cm] (slit) at (18.5,2) {\Large Slit};
-    \node [anchor=east, text width=3cm] (pin) at (18.5,3) {\Large Pin};
+    \node [anchor=east, text width=3cm] (main-tube) at (18.5,7.2) {\Large Main tube \small connected to the player};
+    \node [anchor=east, text width=3cm] (slit) at (18.5,5.5) {\Large Slit};
+    \node [anchor=east, text width=3cm] (pin) at (18.5,3.5) {\Large Pin};
+    \node [anchor=east, text width=3cm] (holder) at (18.5,1.5) {\Large Holder \small connects the motor to the wall of the table};
     \begin{scope}[xshift=1.5cm]
         \node[anchor=south west,inner sep=0] (image) at (0,0) {\includegraphics[width=0.7\textwidth]{../photos/turn_side}};
         \begin{scope}
@@ -73,16 +73,15 @@ A render of the turning mechanism can be seen here:
 %            \draw [-latex, ultra thick, red] (note) to[out=0, in=-120] (0.48,0.80);
 %            \draw [-stealth, line width=5pt, cyan] (water) -- ++(0.4,0.0);
             \draw [-stealth, line width=2pt, red] (motor) -- ++(0.25, 0.0);
-            \draw [-stealth, line width=2pt, red] (holder) -- ++(-0.63, 0.0);
-            \draw [-stealth, line width=2pt, red] (main-tube) -- ++(-0.16, 0.0);
             \draw [-stealth, line width=2pt, red] (larger-tube) to[out=180, in=90] ++(-0.5, -0.21);
-            \draw [-stealth, line width=2pt, red] (slit) to[out=180, in=-90] ++(-0.4, 0.425);
-            \draw [-stealth, line width=2pt, red] (pin) to[out=180, in=-90] ++(-0.45, 0.318);
+            \draw [-stealth, line width=2pt, red] (main-tube) -- ++(-0.16, 0.0);
+            \draw [-stealth, line width=2pt, red] (slit) to[out=180, in=-90] ++(-0.4, 0.1);
+            \draw [-stealth, line width=2pt, red] (pin) to[out=180, in=-90] ++(-0.45, 0.265);
+            \draw [-stealth, line width=2pt, red] (holder) to[out=180, in=-60] ++(-0.65, 0.2);
 %            \draw [-latex, ultra thick, red] (tube) to[out=180, in=-25] ++(-0.33,0.25);
         \end{scope}
     \end{scope}
 \end{tikzpicture}%
-\todo{Maybe switch Holder and slit and pin}
 
 
 \todo{Insert real life image}

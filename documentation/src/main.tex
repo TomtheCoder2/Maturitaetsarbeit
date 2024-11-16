@@ -75,6 +75,15 @@
     string=[b]"
 }
 
+% get name of current section
+\makeatletter
+\newcommand*{\currentname}{\@currentlabelname}
+\makeatother
+
+
+% get name of current chapter
+\let\Chaptermark\chaptermark
+\def\chaptermark#1{\def\Chaptername{#1}\Chaptermark{#1}}
 
 
 
@@ -111,7 +120,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 \thispagestyle{fancy}
 
 \fancyhf{} % clear all fields
-\newcommand{\footl}{Matura Project}
+\newcommand{\footl}{\Chaptername}
 
 \hypersetup{
     colorlinks,
