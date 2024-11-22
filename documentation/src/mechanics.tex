@@ -3,14 +3,14 @@ The design has to be as simple as possible, because the more parts there are the
 % maybe insert quote from elon musk lol
 The main problem that one encounters when designing such a system is:
 As soon as the motor moves the tube, and with it the player, the other motor cannot rotate the player anymore and vice versa.
-To solve this problem, we have to design two parts/systems that can solve this problem.
+To solve this problem, I have to design two parts/systems that can solve this problem.
 %The first connects two tubes that can rotate freely but if one moves the other one moves with it.
 %The second one is the opposite, it connects two tubes that can move freely back and forth but if one rotates the other one rotates with it.
-Therefore, we have two main parts, we called them: Turn Side and Move Side.
+Therefore, I have two main parts, I call them: Turn Side and Move Side.
 
 \subsection{Move Side}\label{subsec:move-side}
 The Move Side is the part that moves the player back and forth.
-We use a combination of a gear and a gear rack to move the player, additionally, we have a mechanism that connects the two tubes.
+I use a combination of a gear and a gear rack to move the player, additionally, I have a mechanism that connects the two tubes.
 A render of the gears and the gear rack can be seen here:\\
 %\begin{figure}[H]
 %    \centering
@@ -20,7 +20,7 @@ A render of the gears and the gear rack can be seen here:\\
 %\end{figure}
 
 \noindent
-\begin{tikzpicture}[H]
+\begin{tikzpicture}
     \node [anchor=west] (gear) at (-1,3.8) {\Large Gear};
     \node [anchor=west] (gear-rack) at (-1,6) {\Large Gear rack};
     \node [anchor=west, text width=2cm] (motor) at (-1,2) {\Large Motor \small \textbf{(PD42-3-1141)}};
@@ -58,7 +58,7 @@ A render of the turning mechanism can be seen here:
 %\end{figure}
 
 \noindent
-\begin{tikzpicture}[H]
+\begin{tikzpicture}
     \node [anchor=west, text width=2cm] (motor) at (-1,5) {\Large Motor \small \textbf{(Pololu)}};
     \node [anchor=east, text width=3cm] (larger-tube) at (18.5,9) {\Large Larger tube \small connected to the motor};
     \node [anchor=east, text width=3cm] (main-tube) at (18.5,7.2) {\Large Main tube \small connected to the player};

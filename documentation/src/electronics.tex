@@ -1,0 +1,239 @@
+\section{General}\label{sec:general2}
+To move the motors I need a controller that sends the right commands to the motors.
+This is achieved by using an Arduino\autocite{arduino} and an arduino cnc shield\autocite{cnc-shield}, which with the help of the DRV8825\autocite{drv8825} driver controls the PD42-3-1141 stepper motor.
+The Pololu DC motor is driven by the L298N\autocite{l298n} stepper motor driver, which is also able to run DC motors.
+%\todo{Add eg circuit diagramm and/or irl image}
+A schematic of the electronics can be seen here:
+
+\begin{center}
+    \begin{tikzpicture}[node distance=2cm]
+        \node (in1) [io] {Camera};
+        \node (pro1) [process, below of=in1] {Image processing};
+        \node (pro2) [process, below of=pro1] {Ball detection and prediction};
+        \node (pro3) [process, below of=pro2] {Arduino};
+        \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {CNC shield};
+        \node (pro5) [process, below of=pro4] {DRV8825};
+        \node (out1) [io, below of=pro5] {Stepper Motor};
+        \node (pro6) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {L298N};
+        \node (out2) [io, below of=pro6] {DC Motor};
+
+        % arrows
+        \draw [arrow] (in1) -- (pro1);
+        \draw [arrow] (pro1) -- (pro2);
+        \draw [arrow] (pro2) -- (pro3);
+        \draw [arrow] (pro3) |- (pro4);
+        \draw [arrow] (pro4) -- (pro5);
+        \draw [arrow] (pro5) -- (out1);
+        \draw [arrow] (pro3) |- (pro6);
+        \draw [arrow] (pro6) -- (out2);
+%        make box around pro1 and pro2 as they are on the computer
+        \draw[red,thick] ($(pro1.north west)+(-1.3,0.6)$)  rectangle ($(pro2.south east)+(0.3,-0.3)$) node[right,midway, xshift=3cm] {Software (Chapter~\ref{ch:software})};
+%       make box from pro6 to out1
+        \draw[red,thick] ($(pro6.north west)+(-1,2.3)$)  rectangle ($(out1.south east)+(2.3,-0.3)$) node[below,midway, yshift=-4cm] {Electronics (Chapter~\ref{ch:electronics})};
+    \end{tikzpicture}
+\end{center}
+
+
+\section{DC Motor}\label{sec:dc-motor}
+A DC Motor has only two inputs and the direction is controlled by the polarity of the two inputs.
+The speed can be controlled by only sending short pulses of power.
+To read out the position of the motor and encoder is used.
+In the encoder attachment at the end of the motor (the black part) contains a disk with small slits that rotates with the motor and a sensor (often optical) that recognizes when the slit passes.
+The position can now be calculated by counting those passes, and because there are two sensors, the direction can be determined by looking at the phase difference.
+A graph of the outputs can be seen here:
+\begin{center}
+    \begin{figure}[H]
+        \centering
+        \begin{subfigure}{.5\textwidth}
+            \centering
+            \begin{tikzpicture}
+                \centering
+                \begin{axis}
+                    [
+                    axis x line=center,
+                    axis y line=center,
+%                    width={0.4\linewidth},
+%                    title={Encoder output while going forward\\},
+                    xtick=none,
+                    ytick={0,1},
+                    yticklabels={low, high},
+                    xlabel={$t$},
+                    ylabel={$V$},
+                    xlabel style={below right},
+                    ylabel style={above left},
+                    xmin=-2,
+                    xmax=22,
+                    ymin=-0.2,
+                    ymax=1.2]
+
+                    \addplot [blue,const plot] table {
+                        0 0
+                        1 1
+                        4 0
+                        7 1
+                        10 0
+                        13 1
+                        16 0
+                        19 1
+                        23 0
+                    };
+                    \addplot [red, const plot] table {
+                        0 0
+                        2 1
+                        5 0
+                        8 1
+                        11 0
+                        14 1
+                        17 0
+                        20 1
+                        23 0
+                    };
+                \end{axis}
+            \end{tikzpicture}
+            \caption[encoder-forwar]{Encoder output while going forward}
+            \label{fig:encoder-forward}
+        \end{subfigure}%
+        \begin{subfigure}{.5\textwidth}
+            \centering
+            \begin{tikzpicture}
+                \centering
+                \begin{axis}
+                    [
+                    axis x line=center,
+                    axis y line=center,
+%                    width={0.4\linewidth},
+%                    title={Encoder output while going forward\\},
+                    xtick=none,
+                    ytick={0,1},
+                    yticklabels={low, high},
+                    xlabel={$t$},
+                    ylabel={$V$},
+                    xlabel style={below right},
+                    ylabel style={above left},
+                    xmin=-2,
+                    xmax=22,
+                    ymin=-0.2,
+                    ymax=1.2]
+
+                    \addplot [blue,const plot] table {
+                        0 0
+                        1 1
+                        4 0
+                        7 1
+                        10 0
+                        13 1
+                        16 0
+                        19 1
+                        23 0
+                    };
+                    \addplot [red, const plot] table {
+                        0 0
+                        0 1
+                        3 0
+                        6 1
+                        9 0
+                        12 1
+                        15 0
+                        18 1
+                        21 0
+                        23 0
+                    };
+                \end{axis}
+            \end{tikzpicture}
+            \caption[encoder-backward]{Encoder output while going backward}
+            \label{fig:encoder-backward}
+        \end{subfigure}
+        \caption{Encoder outputs when the DC motor is turning}
+        \label{fig:encoder}
+    \end{figure}
+\end{center}
+
+An implementation in rust of a function that counts the passes can be seen here:
+\begin{lstlisting}[language=rust,breaklines,label={lst:dc-motor}]
+pub fn count_pos(&mut self, a_b: (bool, bool)) -> i32 {
+    let a = a_b.0;
+    let b = a_b.1;
+    // check if something has changed
+    if a != self.last_a || b != self.last_b {
+        self.position += if (a as i32 - self.last_a as i32) == 0 { 1 * if a { 1 } else { -1 } * if (b as i32 - self.last_b as i32) == 1 { 1 } else { -1 } } else { - (1 * if b { 1 } else { -1 } * (a as i32 - self.last_a as i32))};
+        self.last_a = a;
+        self.last_b = b;
+    }
+    self.position
+}
+
+\end{lstlisting}
+
+
+\section{Stepper Motor}\label{sec:stepper-motor}
+The PD42-3-1141 stepper motor doesn't have an encoder, so the program first sets the position to 0 and then the motor can always do relatively N steps and recompute the position of the stepper motor.
+One problem that can occur is that the motor skips steps, especially when sending the step command with a low delay in between.
+To mitigate this problem, I let the motor accelerate, which is done by starting with a long delay and then lowering it.
+Deceleration is achieved by just making the delay longer again.
+The code for the stepper motor can be seen here:
+\begin{lstlisting}[language=cpp,breaklines,label={lst:stepper-motor}]
+void loop {
+    // ... other logic code
+    if (currentPosition != targetPosition) {
+        int direction = (targetPosition > currentPosition) ? HIGH : LOW;
+        // Set the direction of the motor
+        digitalWrite(dirXPin, direction);
+
+        int stepsToTarget = abs(targetPosition - currentPosition);
+
+        if (stepsToTarget > (maxPulseWidthMicros - pulseWidthMicros) / acc) {
+            // Accelerate to max speed
+            pulseWidthMicros = max(minPulseWidthMicros, pulseWidthMicros - acc);
+        } else {
+            // Decelerate as the motor approaches the target
+            pulseWidthMicros = min(maxPulseWidthMicros, pulseWidthMicros + acc);
+        }
+
+        // Enable the motor
+        digitalWrite(enPin, LOW);
+        // Step the motor for each half-step
+        digitalWrite(stepXPin, HIGH);
+        delayMicroseconds(pulseWidthMicros);
+        digitalWrite(stepXPin, LOW);
+        delayMicroseconds(pulseWidthMicros);
+
+        currentPosition += (direction == HIGH) ? 1 : -1;
+    } else {
+        // Disable the motor
+        digitalWrite(enPin, HIGH);
+    }
+}
+\end{lstlisting}
+Its important that the code first rounds the input to the next integer which is divisible by the step-resolution, in this case 4, because the motor can only stop at full steps.\\
+\vspace{0.5cm}\\
+The PD42-3-1141 stepper motor has 200 steps per rotation, that means the controller sends 200 step-commands until one full rotation is achieved.
+But stepper motors can also do smaller steps, called half, 1/4, 1/8 etc. steps.
+The smaller the steps, the higher the accuracy.
+I chose 1/4 steps because the smaller the steps, the slower the motor and 1/4 seemed a good compromise.
+But how can the arduino send the right commands to the motors?
+First I tried to use the PCB that came with the motor, but I couldn't get it to work.
+It just vibrated and didn't move.
+So switched to the same driver that I use for the DC motor, because it's actually a stepper motor driver that can also drive DC motors.
+That surprisingly worked, and I could control the motor.
+Bu\(t\) I couldn't do micro steps as the LN298N driver doesn't support it.
+After speaking with some colleagues, they suggested looking at the whole construction as a CNC machine, I know that sounds a little bit strange, but a CNC machine is technically also just some motors controlled by one or more controllers.
+Therefore, I bought a CNC shield for the arduino, which is a shield that can control up to 4 stepper motors.
+The shields don't come with drivers, so I had to buy them separately.
+I didn't want to make the same mistake again, so I checked some reviews and found the DRV8825\autocite{drv8825} driver, which can do up to 1/32 steps and is also compatible with the CNC shield.
+After some soldering and connecting the motors to the shield, I can now control the motors with the arduino.
+The next problem with the stepper motor is that it sometimes skips steps.
+Skipping one step though isn't a huge problem, but after some time the small errors add up and the motor is out of sync.
+To mitigate this problem, I added an IR distance sensor to the motor, which measures the distance which the tube has traveled and then adjusts the position of the stepper motor.
+
+\subsection{IR Distance Sensor}\label{subsec:ir-distance-sensor}
+\todo{Not yet testet lol}
+
+\subsection{Arduino code}\label{subsec:arduino-code}
+Why do I use c++ for the code runing on the arduino?
+Usually I want to write all my code in rust, as it is a memory safe language and has a lot of other advantages, because it is quite new and has a lot of modern features.
+One feature is the ease of importing other libraries, which in rust are called crates, which is not as easy in c++.
+There is an arduino framework for rust, but I had problems with the serial connection, I couldn't get it to work reliably.
+Therefore, I switched back to the default arduino framework, which is written in c++.
+At first, I had a complex encoding scheme, which encoded all commands in different bytecodes.
+However, then I realised that it was just simpler to send an integer for the position and, for example, a capital \("\)R\("\) for the reset command.
+Implementing that in c++ for the arduino was quite easy, as the arduino framework has a lot of built-in functions for serial communication.

@@ -7,6 +7,39 @@ This task can be split into the following chapters:
     \item \textbf{Prediction}: Predicting the ball movement
     \item \textbf{Controlling the motors}: Finally, moving the motors to the correct position
 \end{itemize}
+A schematic of the whole process can be seen here:
+% camera - undistortion - ball detection - prediction where the ball will be (y coordinate of the ball when it reaches the player) - motor control
+%                                        |-predict when the ball will reach the player
+%                                        |-live feed to gui for debugging
+%
+
+\begin{center}
+    \begin{tikzpicture}[node distance=2cm]
+        \node (in1) [io] {Camera};
+        \node (pro1) [process, below of=in1] {Image processing};
+        \node (pro2) [process, below of=pro1] {Ball detection and prediction};
+        \node (pro3) [process, below of=pro2] {Arduino};
+        \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {CNC shield};
+        \node (pro5) [process, below of=pro4] {DRV8825};
+        \node (out1) [io, below of=pro5] {Stepper Motor};
+        \node (pro6) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {L298N};
+        \node (out2) [io, below of=pro6] {DC Motor};
+
+        % arrows
+        \draw [arrow] (in1) -- (pro1);
+        \draw [arrow] (pro1) -- (pro2);
+        \draw [arrow] (pro2) -- (pro3);
+        \draw [arrow] (pro3) |- (pro4);
+        \draw [arrow] (pro4) -- (pro5);
+        \draw [arrow] (pro5) -- (out1);
+        \draw [arrow] (pro3) |- (pro6);
+        \draw [arrow] (pro6) -- (out2);
+%        make box around pro1 and pro2 as they are on the computer
+        \draw[red,thick] ($(pro1.north west)+(-1.3,0.6)$)  rectangle ($(pro2.south east)+(0.3,-0.3)$) node[right,midway, xshift=3cm] {Software (Chapter~\ref{ch:software})};
+%       make box from pro6 to out1
+        \draw[red,thick] ($(pro6.north west)+(-1,2.3)$)  rectangle ($(out1.south east)+(2.3,-0.3)$) node[below,midway, yshift=-4cm] {Electronics (Chapter~\ref{ch:electronics})};
+    \end{tikzpicture}
+\end{center}
 
 
 \section{Optics}\label{sec:optics}
@@ -22,12 +55,13 @@ As one can see there is severe distortion in the image, this can be corrected by
 
 % todo: should i explain in detail how opencv does it?
 % lets do it and later i can delete it if its too much
+\todo{Either add lables for the variables or remove this part}
 
 \subsection{OpenCV}\label{subsec:opencv}
 OpenCV is a library that provides many functions for image processing, one of these functions is the camera calibration function.
 The function takes the images of the checkerboard pattern and calculates the distortion coefficients and the camera matrix.
 
-The key principal is to map the distorted image to an undistorted image, this is done by calculating the pixel coordinates of the undistorted image for each pixel in the distorted image.
+The key principal is to map the distorted image to an undistorted image; this is done by calculating the pixel coordinates of the undistorted image for each pixel in the distorted image.
 The Formulas for this are:
 \begin{itemize}
     \item \textbf{Radial distortion:} This is the distortion that makes straight lines appear curved:
@@ -79,7 +113,7 @@ These formulas allow the distorted image points to be remapped to undistorted co
 \subsubsection{Implementation}\label{subsubsec:implementation}
 
 
-Using the undistort function provided by opencv is not fast enough for our needs, because we only have 3ms to do the whole image processing and motor controlling.
+Using the undistort function provided by opencv is not fast enough for our needs, because the program only has 3ms to do the whole image processing and motor controlling.
 So I wrote a custom function that generates a table where the index for each pixel in the new image is stored, so the function doesnt have to calculate the pixel coordinate for the undistorted image each time when the function is called.
 The rust function to get the coordinates $x_{\text{original}},y_{\text{original}}$ of a pixel at $x_{\text{undistorted}},y_{\text{undistorted}}$ in the distorted (original) image looks like this:
 
@@ -126,7 +160,7 @@ fn distort_coords(x: f64, y: f64, fx: f64, fy: f64, cx: f64, cy: f64) -> (f64, f
 }
 \end{lstlisting}
 Where \texttt{DIST\_COEFFS} are the distortion coefficients calculated by the OpenCV calibration function.
-To generate the table I used the following code:
+To generate the table, I used the following code:
 \begin{lstlisting}[language=rust,breaklines,label={lst:gen_table}]
 /// Generate precomputation table for undistortion.
 pub fn gen_table(
@@ -247,7 +281,7 @@ This effect can also be seen in some example footage of the table:
     \caption{Undistorted example image}
     \label{fig:original_undistorted_example}
 \end{figure}
-Therefore we have to crop the image at the sides by a different amount, I made a simple graphical user interface (GUI) to adjust the cropping values.
+Therefore I have to crop the image at the sides by a different amount, I made a simple graphical user interface (GUI) to adjust the cropping values.
 The GUI can be seen here:
 \begin{figure}[H]
     \centering
@@ -304,7 +338,7 @@ This can be done by using a convolutional neural network (CNN) to detect the fid
 
 \subsubsection{Training Data}\label{subsubsec:training-data}
 To train the CNN, one needs a lot of images containing the fiducials, making such a lot of images and then checking where exactly the coordinates of the midpoint of the fiducial lies is very tedious and not practical.
-Therefore i wrote a Java programm to generate about 250 labeled images to train the CNN.
+Therefore i wrote a Java program to generate about 250 labeled images to train the CNN.
 An image containing all the fiducials looks like this (the red point shows the midpoint of the fiducial):
 \begin{figure}[H]
     \centering
@@ -336,7 +370,7 @@ The different parts can be seen here:
 \end{figure}
 \textbf{Create and Train the CNN}\\
 I made two separate CNNs, one for detecting the fiducial (number from 1-4 as there are four fiducials) (also known as classification) and one for detecting the coordinate of the midpoint of the fiducial (from where the real-world measurements are made).
-The CNNs are trained using the tensorflow library made by google.
+The CNNs are trained using the tensorflow\autocite{tf} library made by google.
 The structure of the CNNs can be seen here:
 \begin{figure}[H]
     \centering
@@ -355,7 +389,7 @@ The structure of the CNNs can be seen here:
     \caption{Structure of the CNNs}
     \label{fig:CNN_structure}
 \end{figure}
-An interesting way to visualize the way the CNN works is to use gradcam to visualize the gradient of the image, which corresponds to the parts of the image the CNN is looking at.
+An interesting way to visualize the way the CNN works is to use gradcam\autocite{Selvaraju_2019} to visualize the gradient of the image, which corresponds to the parts of the image the CNN is looking at.
 Grad-Cam is an algorithm to create a saliency map for the CNN, this can be seen here:
 \begin{figure}[H]
     \centering
@@ -382,12 +416,14 @@ The ball detection can be seen here:
     \caption[ball-detection]{Ball detection in action}
     \label{fig:ball_detection}
 \end{figure}
-But having the pixel coordinates is not very useful, so we have to convert the pixel coordinates to real-world coordinates.
-To compute the real world coordinates we compare the pixel coordinates of the ball to the pixel coordinates of the fiducials.
-We need the real world coordinates to move the motors to the correct position as it is possible that the camera moves or the table moves, so the pixel coordinates are not reliable.
+But having the pixel coordinates is not very useful, so the program has to convert the pixel coordinates to real-world coordinates.
+To compute the real world coordinates, the program compares the pixel coordinates of the ball to the pixel coordinates of the fiducials.
+I need the real world coordinates to move the motors to the correct position as it is possible that the camera moves or the table moves, so the pixel coordinates are not reliable.
 I measured the distance between the walls and the fiducials and made a coordinate system so that the fiducial with the number 2 lies in the top left corner (0,0) and the other fiducials are placed accordingly.
-Then to compute the real world coordinates I use a homography matrix to transform the pixel coordinates to real world coordinates.
-\section*{Homography Calculation}
+Then, to compute the real world coordinates, I use a homography matrix to transform the pixel coordinates to real world coordinates.
+
+
+\section{Homography Calculation}\label{sec:homography-calculation}
 
 Homography is used to map points from image coordinates to real-world coordinates.
 The transformation is defined as:
@@ -413,7 +449,7 @@ Where:
     \item \( H \) is the \( 3 \times 3 \) homography matrix.
 \end{itemize}
 
-In Python, we compute \( H \) using the $cv2.findHomography$ function:
+In Python, I compute \( H \) using the $cv2.findHomography$ function:
 
 %\begin{lstlisting}[language=python,breaklines,label={lst:python_homography}]
 %homography_matrix, _ = cv2.findHomography(pixel_points, real_points)
@@ -422,12 +458,10 @@ In Python, we compute \( H \) using the $cv2.findHomography$ function:
 \[
     H, \text{\_} = \text{cv2.findHomography}(\text{pixel\_points}, \text{real\_points})
 \]
-% todo: should i explain how the homography matrix is calculated?
-%\todo{Should i explain how the homography matrix is calculated?}
 The homography matrix can be calculated using some basic linear algebra that can be found here~\autocite{homography}.
 
 In Rust, this matrix is applied to new pixel points via matrix multiplication and normalization.
-% todo: should i explain that i save the stuff a file and then read it to save time?
+% todo: should i explain that i save the stuff to a file and then read it to save time?
 
 
 \section{Prediction}\label{sec:prediction}
@@ -462,7 +496,7 @@ The line of the ball can be computed with the current position $\vec{r}$, the cu
         \vec{r}_\text{intersection} &= \vec{r} + \vec{v} \cdot t
     \end{split}\label{eq:ball_intersection}
 \end{equation}
-Now we only have to convert the $\vec{r}_\text{intersection}$ to real world coordinates and we have the position where the ball will end up, which we send to the arduino to move the stepper motor to this position.
+Now I only have to convert the $\vec{r}_\text{intersection}$ to real world coordinates and I get the position where the ball will end up, which the program sends to the arduino to move the stepper motor to this position.
 
 
 \section{Controlling the motors}\label{sec:controlling-the-motors}

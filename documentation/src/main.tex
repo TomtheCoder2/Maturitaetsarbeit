@@ -5,6 +5,7 @@
 % Packages
 \usepackage{amsmath}
 \usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows}
 %\usepackage{amstex}
 \usetikzlibrary{calc}
 \usepackage{fancyheadings}
@@ -16,17 +17,26 @@
 \usepackage{subcaption}
 \usepackage [autostyle, english = american]{csquotes}
 \usepackage{hyperref}
-
 \usepackage{pgfplots}
+\usepackage{babel}[english]
+%\usepackage[super]{natbib}
 \pgfplotsset{compat=1.12}
+%\usepackage{biblatex}
+\usepackage[backend=bibtex, urldate=long, sorting=none, defernumbers,style=numeric,autocite=superscript]{biblatex}
+\addbibresource{sources.bib}
+\usepackage[fixlanguage]{babelbib}
+%\DefineBibliographyStrings[english]{%
+%    urlseen={last visited},
+%}
+
+\DeclareFieldFormat{urldate}{\mkbibparens{\bibstring{last visited on}\space#1}}
 
 
-
-\usepackage[backend=bibtex, urldate=long, sorting=none, defernumbers=true,autocite=superscript]{biblatex}
 
 % rust formatting
 \usepackage{color}
 \usepackage{listings}
+%\usepackage{biblatex}
 \definecolor{GrayCodeBlock}{RGB}{241,241,241}
 \definecolor{BlackText}{RGB}{110,107,94}
 \definecolor{RedTypename}{RGB}{182,86,17}
@@ -75,6 +85,46 @@
     string=[b]"
 }
 
+\lstdefinelanguage{cpp}
+{
+    columns=fullflexible,
+    keepspaces=true,
+    frame=single,
+    framesep=0pt,
+    framerule=0pt,
+    framexleftmargin=4pt,
+    framexrightmargin=4pt,
+    framextopmargin=5pt,
+    framexbottommargin=3pt,
+    xleftmargin=4pt,
+    xrightmargin=4pt,
+    numbers=left, % display line numbers on the left
+    backgroundcolor=\color{GrayCodeBlock},
+    basicstyle=\ttfamily\color{BlackText},
+    keywords={
+    alignas,alignof,asm,auto,break,case,catch,char,char8_t,char16_t,char32_t,
+    class,const,consteval,constexpr,constinit,continue,decltype,default,delete,do,
+    double,dynamic_cast,else,enum,explicit,export,extern,false,float,for,
+    friend,goto,if,inline,int,long,mutable,namespace,new,noexcept,nullptr,
+    operator,private,protected,public,register,reinterpret_cast,return,
+    short,signed,sizeof,static,static_assert,static_cast,struct,switch,
+    template,this,thread_local,throw,true,try,typedef,typeid,typename,
+    union,unsigned,using,virtual,void,volatile,wchar_t,while
+},
+    keywordstyle=\color{PurpleKeyword},
+    ndkeywords={
+    std,string,vector,map,set,unordered_map,unordered_set,shared_ptr,
+    unique_ptr,weak_ptr,array,optional,variant,tuple,pair,ostream,
+    istream,cout,cin,endl
+},
+    ndkeywordstyle=\color{RedTypename},
+    comment=[l][\color{GrayComment}\slshape]{//},
+    morecomment=[s][\color{GrayComment}\slshape]{/*}{*/},
+    stringstyle=\color{GreenString},
+    string=[b]"
+}
+
+
 % get name of current section
 \makeatletter
 \newcommand*{\currentname}{\@currentlabelname}
@@ -93,6 +143,12 @@ mark=at position .9 with {\arrowreversed[scale=1.5]{stealth}}}}]
 \tikzstyle tangent=[postaction={decorate,decoration={markings, % Tangent to the field line
 mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt,0)--(12pt,0)node[above]{$\vec{B}$};}}}]
 \tikzstyle fLines=[thick,dashed,directed,tangent]
+% tikz stuff for the flow charts
+\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm,text centered, draw=black, fill=red!30]
+\tikzstyle{io} = [trapezium, trapezium left angle=70, trapezium right angle=110, minimum width=1cm, minimum height=1cm, text centered, draw=black, fill=blue!30]
+\tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=orange!30]
+\tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=green!30]
+\tikzstyle{arrow} = [thick,->,>=stealth]
 
 \title{Matura Project}
 \author{Jan Wilhelm}
@@ -144,6 +200,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 % Document
 \begin{document}
     % todo: main questions: We/I or unpersonal?
+    % -> I always use I
     \maketitle
 
     \tableofcontents
@@ -162,20 +219,16 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \input{mechanics}
 
 
-    \section{Frame}\label{sec:frame}
+    \chapter{Construction}\label{ch:construction}
+    \input{construction}
 
 
     \chapter{Electronics}\label{ch:electronics}
+    \input{electronics}
 
 
     \chapter{Software}\label{ch:software}
     \input{software}
-
-
-    \chapter{Construction}\label{ch:construction}
-
-
-    \section{Timeline}\label{sec:timeline}
 
 
     \chapter{Conclusion}\label{ch:conclusion}
@@ -194,8 +247,17 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 
     \section{References}\label{sec:references}
-    \bibliographystyle{plain}
-    \bibliography{sources}
+
+    \printbibliography
+%    \newpage
+%    \bibliographystyle{unsrt}
+%%    \renewcommand\refname{Quellen}
+%    \makeatletter
+%    \renewcommand\@biblabel[1]{\textbullet}
+%    \makeatother
+%    \bibliography{sources} % Entries are in the refs.bib file
+%    \printbibliography
+%    \nocite{*}
 
 
     \section{Appendix}\label{sec:appendix}
