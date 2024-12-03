@@ -28,6 +28,8 @@ pub enum Command {
     Pause,
     Reset,
     ReloadRaw,
+    PausePlayer(bool),
+    MoveCenter
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -65,6 +67,7 @@ pub struct App {
     last_frame: Instant,
     overlay_ball: bool,
     show_player_predicition: bool,
+    pause_player: bool,
 }
 
 impl Default for App {
@@ -94,6 +97,7 @@ impl Default for App {
             last_frame: Instant::now(),
             overlay_ball: true,
             show_player_predicition: true,
+            pause_player: false,
         }
     }
 }
@@ -250,8 +254,9 @@ impl eframe::App for App {
             // ui.label(format!("Motor pos: {}", self.motor_pos));
             let mut player_final_pos = 0;
             // x = 102 is the player
-            if let Some(y_inercept) = self.ball_comp.intersection_x(102.) {
-                let rl_y_intercept = self.compute_rl_coords.transform_point((y_inercept.x, y_inercept.y));
+            if let Some(y_intercept) = self.ball_comp.intersection_x(44.) {
+                let y_intercept = y_intercept.0;
+                let rl_y_intercept = self.compute_rl_coords.transform_point((y_intercept.x, y_intercept.y));
                 // y=0 for the player is at 450mm rl coords
                 let player_y = 450. - rl_y_intercept.1;
                 // let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
@@ -413,6 +418,9 @@ impl eframe::App for App {
                         // self.arduino_com.send_string("R");
                         self.sender.send(Reset).unwrap();
                     }
+                    if ui.button("Move to center").clicked() {
+                        self.sender.send(Command::MoveCenter).unwrap();
+                    }
 
             });
             ui.horizontal(|ui| {
@@ -430,6 +438,9 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
                 ui.checkbox(&mut self.overlay_ball, "Overlay Ball");
                 ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
+                if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
+                    self.sender.send(Command::PausePlayer(self.pause_player));
+                }
                 if self.calibration_mode {
                     ui.label("Calibration Image Interval: ");
                     ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
@@ -710,6 +721,77 @@ fn main() {
 
         let mut undistorted_image = vec![0u8; (new_width * new_height * 3) as usize];
         let mut ball_comp = BallComp::new();
+        let mut shoot_time = 0.;
+        // whether the ball has already been shot at time shoot_time
+        let mut shot = true;
+        let mut time_since_catch = Instant::now();
+        let mut pause_player = false;
+        let mut moved_to_center = true;
+
+        // functions
+        const MIN_MOTOR: i32 = 0;
+        const MAX_MOTOR: i32 = 330;
+        const MIN_PIXEL: i32 = 226;
+        const MAX_PIXEL: i32 = 350;
+        fn move_y(
+            x: f32,
+            o_y: f32,
+            arduino_com: &mut ArduinoCom,
+            last_command: &mut Instant,
+            rl_comp: &RLCompute,
+            player_0: i32,
+            player_target: &mut i32,
+            paused_player: bool,
+        ) {
+            *player_target = o_y as i32;
+            // let y = rl_comp.transform_point((x, o_y)).1 + player_0 as f32;
+            let y = o_y;
+            // println!("oy: {o_y}, y: {y}, 450 - y: {}", 450. - y);
+            //
+            // motor, pixel y
+            // 0,   350
+            // 330, 226
+            //
+            // pixel y, motor
+            // 226, 330
+            // 350, 0
+            //
+            // A(226, 330) B(350, 0)
+            // y = mx + b
+            // m = (y2 - y1) / (x2 - x1)
+            // b = y1 - m * x1
+            // m = (0 - 330) / (350 - 226) = -330 / 124 = -2.6612903226
+            // b = 330 - (-2.66 * 226) = 330 + 600.76 = 931.4516129076
+            // y = -2.66 * x + 930.76
+            // motor = y - 350
+            if y > MIN_PIXEL as f32
+                && y < MAX_PIXEL as f32
+                && last_command.elapsed().as_secs_f32() > 0.05
+            {
+                // convert from pixel y to motor
+                let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
+                let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
+                let x = m * y + b;
+                // println!("sending: y: {y}");
+                if !paused_player {
+                    arduino_com.send_string(&format!("{}", x as i32));
+                    *last_command = Instant::now();
+                }
+            }
+        }
+        fn move_center(
+            arduino_com: &mut ArduinoCom,
+            last_command: &mut Instant,
+            player_0: i32,
+            paused_player: bool,
+        ) {
+            // let y = (MIN_PIXEL + MAX_PIXEL) as f32 / 2.;
+            if !paused_player && last_command.elapsed().as_secs_f32() > 0.05 {
+                arduino_com.send_string(&format!("{}", 212 as i32));
+                *last_command = Instant::now();
+            }
+            arduino_com.send_string(&format!("check 5"));
+        }
 
         loop {
             if let Ok(message) = rx.try_recv() {
@@ -724,7 +806,7 @@ fn main() {
                         paused = true;
                     }
                     Reset => {
-                        arduino_com.send_string("R");
+                        arduino_com.send_string("full_reset");
                     }
                     Stop => {
                         break;
@@ -740,6 +822,13 @@ fn main() {
                             .collect::<Vec<u8>>();
                         let raw_image1 = raw_image1.as_slice();
                         // raw_image = raw_image1.clone();
+                    }
+                    PausePlayer(pause) => {
+                        pause_player = pause;
+                    }
+                    MoveCenter => {
+                        move_center(&mut arduino_com, &mut last_command, 0, pause_player);
+                        moved_to_center = true;
                     }
                     _ => {
                         println!("Unknown command: {:?}", message);
@@ -846,74 +935,19 @@ fn main() {
                         // last_command = Instant::now();
                     }
 
-                    const MIN_MOTOR: i32 = 0;
-                    const MAX_MOTOR: i32 = 330;
-                    const MIN_PIXEL: i32 = 226;
-                    const MAX_PIXEL: i32 = 350;
-                    fn move_y(
-                        x: f32,
-                        o_y: f32,
-                        arduino_com: &mut ArduinoCom,
-                        last_command: &mut Instant,
-                        rl_comp: &RLCompute,
-                        player_0: i32,
-                        player_target: &mut i32,
-                    ) {
-                        *player_target = o_y as i32;
-                        // let y = rl_comp.transform_point((x, o_y)).1 + player_0 as f32;
-                        let y = o_y;
-                        // println!("oy: {o_y}, y: {y}, 450 - y: {}", 450. - y);
-                        //
-                        // motor, pixel y
-                        // 0,   350
-                        // 330, 226
-                        //
-                        // pixel y, motor
-                        // 226, 330
-                        // 350, 0
-                        //
-                        // A(226, 330) B(350, 0)
-                        // y = mx + b
-                        // m = (y2 - y1) / (x2 - x1)
-                        // b = y1 - m * x1
-                        // m = (0 - 330) / (350 - 226) = -330 / 124 = -2.6612903226
-                        // b = 330 - (-2.66 * 226) = 330 + 600.76 = 931.4516129076
-                        // y = -2.66 * x + 930.76
-                        // motor = y - 350
-                        if y > MIN_PIXEL as f32
-                            && y < MAX_PIXEL as f32
-                            && last_command.elapsed().as_secs_f32() > 0.001
-                        {
-                            // convert from pixel y to motor
-                            let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
-                            let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
-                            let x = m * y + b;
-                            // println!("sending: y: {y}");
-                            arduino_com.send_string(&format!("{}", x as i32));
-                            *last_command = Instant::now();
-                        }
-                    }
-                    fn move_center(
-                        arduino_com: &mut ArduinoCom,
-                        last_command: &mut Instant,
-                        player_0: i32,
-                    ) {
-                        let y = (MIN_PIXEL + MAX_PIXEL) as f32 / 2.;
-                        move_y(
-                            0.,
-                            y,
-                            arduino_com,
-                            last_command,
-                            &RLCompute::new(),
-                            player_0,
-                            &mut 0,
-                        );
-                    }
+
                     if ball_comp.velocity.x < 0.0 && ball_comp.velocity.magnitude() > 20. {
                         // the ball goes towards the goal
-                        let intersection = ball_comp.intersection_x(30.);
+                        let intersection = ball_comp.intersection_x(44.);
                         if let Some(intersection) = intersection {
                             // println!("intersection: {:?}", intersection);
+                            let t = intersection.1;
+                            shoot_time = t0.elapsed().as_secs_f32() + t;
+                            if t > 0. && ball_comp.velocity.magnitude() > 50.0 {
+                                shot = false;
+                            }
+                            // println!("t: {t}, shoot_time: {}", shoot_time);
+                            let intersection = intersection.0;
                             move_y(
                                 intersection.x,
                                 intersection.y,
@@ -922,22 +956,54 @@ fn main() {
                                 &rl_comp,
                                 player_0,
                                 &mut player_target,
+                                pause_player,
                             );
-                        } else {
-                            move_center(&mut arduino_com, &mut last_command, player_0)
+                            time_since_catch = Instant::now();
+                            moved_to_center = false;
+                        } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center
+                        {
+                            // move_center(
+                            //     &mut arduino_com,
+                            //     &mut last_command,
+                            //     player_0,
+                            //     pause_player,
+                            // );
+                            moved_to_center = true;
                         }
-                    } else {
-                        move_center(&mut arduino_com, &mut last_command, player_0)
+                    } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center {
+                        // move_center(&mut arduino_com, &mut last_command, player_0, pause_player);
+                        moved_to_center = true;
                     }
-                    // move_y(
-                    //     ball.0 as f32,
-                    //     ball.1 as f32,
-                    //     &mut arduino_com,
-                    //     &mut last_command,
-                    //     &rl_comp,
-                    //     0,
-                    //     &mut player_target,
-                    // );
+
+                    // shoot
+                    if !shot && t0.elapsed().as_secs_f32() > shoot_time {
+                        arduino_com.send_string("S");
+                        shot = true;
+                    }
+
+                    let y = ball.1 as f32;
+                    if y > MIN_PIXEL as f32
+                        && y < MAX_PIXEL as f32
+                        && last_command.elapsed().as_secs_f32() > 0.05
+                    {
+                        // convert from pixel y to motor
+                        let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
+                        let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
+                        let x = m * y + b;
+                        // println!("sending: y: {y}");
+                        // arduino_com.send_string(&format!("{}", x as i32));
+                        // last_command = Instant::now();
+                    }
+                    move_y(
+                        ball.0 as f32,
+                        ball.1 as f32,
+                        &mut arduino_com,
+                        &mut last_command,
+                        &rl_comp,
+                        0,
+                        &mut player_target,
+                        pause_player,
+                    );
                     if frame_counter % 1 == 0 {
                         // save to IMAGE_BUFFER
                         let mut buffer = IMAGE_BUFFER.lock().unwrap();
@@ -954,71 +1020,72 @@ fn main() {
         }
     });
 
-    thread::spawn(move || {
-        let t0 = t0_second_thread;
-        // this thread will poll the image all the time and check where the player is and save it to ACTUAL_PLAYER_POSITION
-        let mut python_script = matura::detect_player::PythonScript::new();
-        println!("Initialized python script");
-        let mut last_t = Instant::now();
-        loop {
-            let t = Instant::now();
-            let time = t0.elapsed().as_secs_f32();
-            let buffer = { IMAGE_BUFFER_UNDISTORTED.lock().unwrap().clone() };
-            let image = buffer.2;
-            let width = buffer.0;
-            let height = buffer.1;
-            // convert the image to a DynamicImage
-            let mut img = image::DynamicImage::ImageRgb8(
-                image::ImageBuffer::from_raw(width as u32, height as u32, image.clone()).unwrap(),
-            );
-            for i in 0..width as usize * height as usize {
-                let r = image[i * 3];
-                let g = image[i * 3 + 1];
-                let b = image[i * 3 + 2];
-                img.put_pixel(
-                    i as u32 % width as u32,
-                    i as u32 / width as u32,
-                    image::Rgba([r, g, b, 100]),
-                );
-            }
-            // Get the dimensions of the image
-            let (width, height) = img.dimensions();
+    // we dont need this thread anymore actually
+    // thread::spawn(move || {
+    //     let t0 = t0_second_thread;
+    //     // this thread will poll the image all the time and check where the player is and save it to ACTUAL_PLAYER_POSITION
+    //     let mut python_script = matura::detect_player::PythonScript::new();
+    //     println!("Initialized python script");
+    //     let mut last_t = Instant::now();
+    //     loop {
+    //         let t = Instant::now();
+    //         let time = t0.elapsed().as_secs_f32();
+    //         let buffer = { IMAGE_BUFFER_UNDISTORTED.lock().unwrap().clone() };
+    //         let image = buffer.2;
+    //         let width = buffer.0;
+    //         let height = buffer.1;
+    //         // convert the image to a DynamicImage
+    //         let mut img = image::DynamicImage::ImageRgb8(
+    //             image::ImageBuffer::from_raw(width as u32, height as u32, image.clone()).unwrap(),
+    //         );
+    //         for i in 0..width as usize * height as usize {
+    //             let r = image[i * 3];
+    //             let g = image[i * 3 + 1];
+    //             let b = image[i * 3 + 2];
+    //             img.put_pixel(
+    //                 i as u32 % width as u32,
+    //                 i as u32 / width as u32,
+    //                 image::Rgba([r, g, b, 100]),
+    //             );
+    //         }
+    //         // Get the dimensions of the image
+    //         let (width, height) = img.dimensions();
 
-            // Calculate the width of each slice
-            let slice_width = width / 7;
+    //         // Calculate the width of each slice
+    //         let slice_width = width / 7;
 
-            // Crop the left-most slice
-            let left_slice = img.crop(
-                0,
-                (1. / 3. * height as f32) as u32,
-                slice_width,
-                (1. / 3. * height as f32) as u32,
-            );
-            let img = left_slice.resize_exact(128, 128, image::imageops::FilterType::Nearest);
-            // get player position
-            let values = img
-                .to_rgb8()
-                .into_raw()
-                .iter()
-                .map(|&v| v as u8)
-                .collect::<Vec<u8>>();
-            assert_eq!(values.len(), 128 * 128 * 3);
-            // println!("prep: {:?}", t.elapsed());
-            let player_position = python_script.detect_player(&values);
-            let t = Instant::now();
-            ACTUAL_PLAYER_POSITION.lock().unwrap().0 = player_position.0;
-            ACTUAL_PLAYER_POSITION.lock().unwrap().1 =
-                player_position.1 + (1. / 3. * height as f32) as u32;
-            ACTUAL_PLAYER_POSITION.lock().unwrap().2 = time;
-            ACTUAL_PLAYER_POSITION.lock().unwrap().3 = false;
-            // println!("after: {:?}", t.elapsed());
-            PLAYER_DETECTION_FPS.store(
-                (1. / last_t.elapsed().as_secs_f32()) as i32,
-                Ordering::Relaxed,
-            );
-            last_t = Instant::now();
-        }
-    });
+    //         // Crop the left-most slice
+    //         let left_slice = img.crop(
+    //             0,
+    //             (1. / 3. * height as f32) as u32,
+    //             slice_width,
+    //             (1. / 3. * height as f32) as u32,
+    //         );
+    //         let img = left_slice.resize_exact(128, 128, image::imageops::FilterType::Nearest);
+    //         // get player position
+    //         let values = img
+    //             .to_rgb8()
+    //             .into_raw()
+    //             .iter()
+    //             .map(|&v| v as u8)
+    //             .collect::<Vec<u8>>();
+    //         assert_eq!(values.len(), 128 * 128 * 3);
+    //         // println!("prep: {:?}", t.elapsed());
+    //         let player_position = python_script.detect_player(&values);
+    //         let t = Instant::now();
+    //         ACTUAL_PLAYER_POSITION.lock().unwrap().0 = player_position.0;
+    //         ACTUAL_PLAYER_POSITION.lock().unwrap().1 =
+    //             player_position.1 + (1. / 3. * height as f32) as u32;
+    //         ACTUAL_PLAYER_POSITION.lock().unwrap().2 = time;
+    //         ACTUAL_PLAYER_POSITION.lock().unwrap().3 = false;
+    //         // println!("after: {:?}", t.elapsed());
+    //         PLAYER_DETECTION_FPS.store(
+    //             (1. / last_t.elapsed().as_secs_f32()) as i32,
+    //             Ordering::Relaxed,
+    //         );
+    //         last_t = Instant::now();
+    //     }
+    // });
 
     run_camera_test(tx);
 }
