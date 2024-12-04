@@ -1,6 +1,7 @@
 use eframe::egui;
-use egui_extras::RetainedImage;
-
+use eframe::epaint::{ColorImage, TextureHandle};
+use egui::Context;
+use image::DynamicImage;
 // fn main() {
 //     let mut arduino_com = matura::arduino_com::ArduinoCom::new();
 //     arduino_com.send_string("full_reset");
@@ -26,6 +27,10 @@ use egui_extras::RetainedImage;
 //     }
 // }
 
+fn load_texture_from_image(ctx: &Context, image: ColorImage) -> TextureHandle {
+    ctx.load_texture("my_image", image, Default::default())
+}
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
     eframe::run_native(
@@ -36,8 +41,8 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 struct MyApp {
-    image: Option<RetainedImage>,
-    click_position: Option<egui::Pos2>,
+    image: Option<DynamicImage>,
+    click_position: Option<egui::emath::Vec2>,
 }
 
 impl Default for MyApp {
@@ -53,13 +58,25 @@ impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Click on the image to draw a red dot!");
+            if ui.button("Next").clicked() {
+                println!("Position: {:?}", self.click_position);
+            }
 
             if let Some(image) = &self.image {
-                let texture = image.texture_id(ctx);
-                let size = image.size_vec2();
+                let texture = load_texture_from_image(
+                    ctx,
+                    ColorImage::from_rgb(
+                        [
+                            image.width() as usize,
+                            image.height() as usize,
+                        ],
+                        image.as_bytes(),
+                    ),
+                );
+                // let size = image.size_vec2();
 
                 egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                    let response = ui.image(texture, size).interact(egui::Sense::click());
+                    let response = ui.image(&texture).interact(egui::Sense::click());
 
                     if response.clicked() {
                         if let Some(pos) = response.hover_pos() {
@@ -82,11 +99,8 @@ impl eframe::App for MyApp {
             } else {
                 ui.label("Loading image...");
                 if self.image.is_none() {
-                    if let Ok(image) = RetainedImage::from_image_path("example.png") {
-                        self.image = Some(image);
-                    } else {
-                        ui.label("Failed to load the image. Make sure 'example.png' is in the project directory.");
-                    }
+                    let image = DynamicImage::ImageRgb8(image::open("test_img.png").unwrap().to_rgb8());
+                    self.image = Some(image);
                 }
             }
         });

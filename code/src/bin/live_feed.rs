@@ -20,7 +20,7 @@ use crate::Command::*;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Command {
     Exposure(f64),
     Start,
@@ -29,7 +29,15 @@ pub enum Command {
     Reset,
     ReloadRaw,
     PausePlayer(bool),
-    MoveCenter
+    MoveCenter,
+    PlayerCalibration(i32),
+    FinishPlayerCalibration(Vec<i32>),
+}
+
+#[derive(Debug)]
+pub enum Mode {
+    Normal,
+    PlayerCalibration,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -68,7 +76,18 @@ pub struct App {
     overlay_ball: bool,
     show_player_predicition: bool,
     pause_player: bool,
+    #[serde(skip)]
+    click_position: Option<egui::emath::Vec2>,
+    #[serde(skip)]
+    mode: Mode,
+    #[serde(skip)]
+    player_calibration_pos: i32,
+    final_player_calibration_positions: Vec<i32>,
+    #[serde(skip)]
+    player_calibration_message: String,
 }
+
+const POS: [i32; 7] = [50, 100, 150, 200, 250, 300, 350];
 
 impl Default for App {
     fn default() -> Self {
@@ -98,6 +117,11 @@ impl Default for App {
             overlay_ball: true,
             show_player_predicition: true,
             pause_player: false,
+            click_position: None,
+            mode: Mode::Normal,
+            player_calibration_pos: 0,
+            final_player_calibration_positions: Vec::new(),
+            player_calibration_message: "".to_string(),
         }
     }
 }
@@ -153,7 +177,7 @@ impl eframe::App for App {
                 }
             };
             let actual_player_pos = ACTUAL_PLAYER_POSITION.lock().unwrap().clone();
-            let comp_fps = 1./self.last_frame.elapsed().as_secs_f64();
+            let comp_fps = 1. / self.last_frame.elapsed().as_secs_f64();
             self.last_frame = Instant::now();
             let player_detection_fps = PLAYER_DETECTION_FPS.load(Ordering::Relaxed);
             ui.label(format!("Comp FPS: {:>5.0}, actual player pos: {}:{}, player detection fps: {}", comp_fps, actual_player_pos.0, actual_player_pos.1, player_detection_fps));
@@ -178,7 +202,7 @@ impl eframe::App for App {
             let new_width =
                 (image.width() as f32 / image.height() as f32 * new_height as f32) as u32;
             // let mut image =
-                // image.resize(new_width, new_height, image::imageops::FilterType::Nearest);
+            // image.resize(new_width, new_height, image::imageops::FilterType::Nearest);
             let mut original_undistorted_image = image.clone();
             let unmodified_original_undistorted_image = image.clone();
             let original_image = DynamicImage::ImageRgb8(
@@ -187,30 +211,30 @@ impl eframe::App for App {
             let mut subtracted_image = image.clone();
             // subract self.raw_image from image
             // if self.overlay_raw_img {
-                let raw_image = &self.raw_image;
-                for x in 0..raw_image.width() {
-                    for y in 0..raw_image.height() {
-                        let raw_pixel = raw_image.pixels[y * raw_image.width() + x];
-                        if x >= subtracted_image.width() as usize || y >= subtracted_image.height() as usize {
-                            // println!("Pixel out of bounds: {}x{}", x, y);
-                            continue;
-                        }
-                        let image_pixel = subtracted_image.get_pixel(x as u32, y as u32);
-                        let r = image_pixel[0] as i32 - raw_pixel[0] as i32;
-                        let g = image_pixel[1] as i32 - raw_pixel[1] as i32;
-                        let b = image_pixel[2] as i32 - raw_pixel[2] as i32;
-                        subtracted_image.put_pixel(
-                            x as u32,
-                            y as u32,
-                            image::Rgba([
-                                (r.max(0) as u8).min(255),
-                                (g.max(0) as u8).min(255),
-                                (b.max(0) as u8).min(255),
-                                255,
-                            ]),
-                        );
+            let raw_image = &self.raw_image;
+            for x in 0..raw_image.width() {
+                for y in 0..raw_image.height() {
+                    let raw_pixel = raw_image.pixels[y * raw_image.width() + x];
+                    if x >= subtracted_image.width() as usize || y >= subtracted_image.height() as usize {
+                        // println!("Pixel out of bounds: {}x{}", x, y);
+                        continue;
                     }
+                    let image_pixel = subtracted_image.get_pixel(x as u32, y as u32);
+                    let r = image_pixel[0] as i32 - raw_pixel[0] as i32;
+                    let g = image_pixel[1] as i32 - raw_pixel[1] as i32;
+                    let b = image_pixel[2] as i32 - raw_pixel[2] as i32;
+                    subtracted_image.put_pixel(
+                        x as u32,
+                        y as u32,
+                        image::Rgba([
+                            (r.max(0) as u8).min(255),
+                            (g.max(0) as u8).min(255),
+                            (b.max(0) as u8).min(255),
+                            255,
+                        ]),
+                    );
                 }
+            }
             // }
             // dbg!();
             // let original_image =
@@ -247,9 +271,9 @@ impl eframe::App for App {
             }
             // }
             // if let Some(pos) = self.arduino_com.try_receive_command() {
-                // if let com::commands::Command::Pos(p) = pos {
-                    // self.motor_pos = p;
-                // }
+            // if let com::commands::Command::Pos(p) = pos {
+            // self.motor_pos = p;
+            // }
             // }
             // ui.label(format!("Motor pos: {}", self.motor_pos));
             let mut player_final_pos = 0;
@@ -262,7 +286,7 @@ impl eframe::App for App {
                 // let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
                 // let player_y = 450. - ball_irl.1;
                 // ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
-                    // ui.label(format!("Player pos: y: {:.2}", player_y));});
+                // ui.label(format!("Player pos: y: {:.2}", player_y));});
                 if player_y > 5. && player_y < 140. && self.last_command.elapsed().as_secs_f32() > 0.001 {
                     // gear: diameter = 83mm, 200 steps per revolution, 1
                     // c
@@ -271,7 +295,7 @@ impl eframe::App for App {
                     let x = 1058.82 - 2.35 * rl_y_intercept.1;
                     // println!("pos: {player_y}");
                     // if rot < 30. {
-                        // self.arduino_com.send_command(com::commands::Command::Reset(40));
+                    // self.arduino_com.send_command(com::commands::Command::Reset(40));
                     // }
                     // self.arduino_com.send_stepper_motor_speed(self.speed);
                     // self.arduino_com.send_stepper_motor_pos(rot as i32);
@@ -294,7 +318,7 @@ impl eframe::App for App {
             let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
             let player_y = 450. - ball_irl.1;
             // ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
-                // ui.label(format!("Player pos: y: {:.2}", player_y));});
+            // ui.label(format!("Player pos: y: {:.2}", player_y));});
             ui.horizontal(|ui| {
                 ui.label(format!(
                     "Ball: x: {:.2}, y: {:.2}, radius: {:.2}, velocity: x: {:.2}, y: {:.2}, magnitude: {:.2}",
@@ -312,7 +336,7 @@ impl eframe::App for App {
                 player_final_pos = x as i32;
                 // println!("pos: {player_y}");
                 // if rot < 30. {
-                    // self.arduino_com.send_command(com::commands::Command::Reset(40));
+                // self.arduino_com.send_command(com::commands::Command::Reset(40));
                 // }
                 // self.arduino_com.send_stepper_motor_speed(self.speed);
                 // self.arduino_com.send_stepper_motor_pos(rot as i32);
@@ -321,7 +345,7 @@ impl eframe::App for App {
             }
 
             if self.show_player_predicition {
-                matura::ball::draw_circle(&mut image, 100, actual_player_pos.1, 5., [255,0 ,0 , 255]);
+                matura::ball::draw_circle(&mut image, 100, actual_player_pos.1, 5., [255, 0, 0, 255]);
                 // draw the line y = actual_player_pos.1
                 for x in 0..image.width() {
                     image.put_pixel(x, actual_player_pos.1 as u32, image::Rgba([255, 0, 0, 255]));
@@ -393,10 +417,10 @@ impl eframe::App for App {
                 if ui.button("Save Image").clicked()
                     || ui.input(|ui| ui.key_pressed(egui::Key::Enter))
                     || (self.calibration_mode
-                        && Instant::now()
-                            .duration_since(self.last_cal_image)
-                            .as_secs_f64()
-                            > self.calibration_interval)
+                    && Instant::now()
+                    .duration_since(self.last_cal_image)
+                    .as_secs_f64()
+                    > self.calibration_interval)
                 {
                     save_img(image.clone(), self.file_name.clone());
                     save_img(original_image, self.file_name.clone() + "_raw");
@@ -411,17 +435,16 @@ impl eframe::App for App {
                     self.raw_image = load_raw();
                     self.sender.send(ReloadRaw);
                 }
-                    ui.label("Speed:");
-                    ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
-                    if ui.button("Reset").clicked() {
-                        // self.arduino_com.send_command(com::commands::Command::Reset(0));
-                        // self.arduino_com.send_string("R");
-                        self.sender.send(Reset).unwrap();
-                    }
-                    if ui.button("Move to center").clicked() {
-                        self.sender.send(Command::MoveCenter).unwrap();
-                    }
-
+                ui.label("Speed:");
+                ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
+                if ui.button("Reset").clicked() {
+                    // self.arduino_com.send_command(com::commands::Command::Reset(0));
+                    // self.arduino_com.send_string("R");
+                    self.sender.send(Reset).unwrap();
+                }
+                if ui.button("Move to center").clicked() {
+                    self.sender.send(Command::MoveCenter).unwrap();
+                }
             });
             ui.horizontal(|ui| {
                 ui.label("Exposure: ");
@@ -440,6 +463,46 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
                 if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
                     self.sender.send(Command::PausePlayer(self.pause_player));
+                }
+                if matches!(self.mode, Mode::PlayerCalibration) {
+                    ui.label("Click on Player!");
+                    if self.player_calibration_message.len() > 0 {
+                        ui.label(&self.player_calibration_message);
+                    }
+                    if ui.button("Next").clicked() || ui.input(|ui| ui.key_pressed(egui::Key::S)){
+                        if self.click_position.is_none() {
+                            self.player_calibration_message = "Click on the player!".to_string();
+                        } else {
+                            self.player_calibration_message = "".to_string();
+                            let pos = self.click_position.unwrap();
+                            let posy = pos.y as i32;
+                            if self.player_calibration_pos >= 0 {
+                                self.final_player_calibration_positions.push(posy);
+                            }
+                            println!("Player pos: y:{}", posy);
+                            self.player_calibration_pos += 1;
+                            if self.player_calibration_pos >= POS.len() as i32 {
+                                self.mode = Mode::Normal;
+                                println!("Player calibration finished");
+                                println!("pos: {:?}", self.final_player_calibration_positions);
+                                println!("Player calibration positions: {}", self.final_player_calibration_positions.iter().enumerate().map(|(i, x)| format!("\t{}: {}: {}\n", i, POS[i], x)).collect::<Vec<String>>().join(""));
+                                self.sender.send(Command::FinishPlayerCalibration(self.final_player_calibration_positions.clone()));
+                                self.sender.send(Command::PausePlayer(false));
+                                self.pause_player = false;
+                            } else {
+                                self.sender.send(Command::PlayerCalibration(POS[self.player_calibration_pos as usize]));
+                            }
+                        }
+                    }
+                } else {
+                    if ui.button("Player Calibration").clicked() {
+                        self.mode = Mode::PlayerCalibration;
+                        self.player_calibration_pos = -1;
+                        self.sender.send(Command::PausePlayer(true));
+                        self.pause_player = true;
+                        self.sender.send(Command::PlayerCalibration(-1));
+                        self.final_player_calibration_positions.clear();
+                    }
                 }
                 if self.calibration_mode {
                     ui.label("Calibration Image Interval: ");
@@ -512,15 +575,35 @@ impl eframe::App for App {
                 }
             });
             // ui.image(&texture);
-            ui.horizontal(|ui| {
-                if self.show_original {
-                    ui.add(
-                        egui::Image::new(&original_texture), // .max_width(200.0).rounding(10.0)
-                    );
-                }
-                ui.add(
-                    egui::Image::new(&undistorted_texture), // .max_width(200.0).rounding(10.0)
-                );
+            egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if self.show_original {
+                        ui.add(
+                            egui::Image::new(&original_texture), // .max_width(200.0).rounding(10.0)
+                        );
+                    }
+
+
+                    let response = ui.image(&undistorted_texture).interact(egui::Sense::click());
+
+                    if response.clicked() {
+                        if let Some(pos) = response.hover_pos() {
+                            // Get the click position relative to the image
+                            let local_pos = pos - response.rect.min;
+                            self.click_position = Some(local_pos);
+
+                            // Log the pixel coordinates
+                            println!("Clicked at: ({}, {})", local_pos.x as u32, local_pos.y as u32);
+                        }
+                    }
+
+                    // Draw the red dot where the user clicked
+                    if let Some(pos) = self.click_position {
+                        let screen_pos = response.rect.min + pos;
+                        ui.painter()
+                            .circle_filled(screen_pos, 5.0, egui::Color32::RED);
+                    }
+                });
             });
             ui.label(format!("FPS: {:>5.0}", 1. / (*FPS.lock().unwrap())));
         });
@@ -562,7 +645,7 @@ pub fn run_camera_test(tx: Sender<Command>) {
         Default::default(),
         Box::new(|cc| Box::new(App::new(tx, cc))),
     )
-    .expect("Failed to run Camera Test");
+        .expect("Failed to run Camera Test");
 }
 
 fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String) {
@@ -728,6 +811,8 @@ fn main() {
         let mut pause_player = false;
         let mut moved_to_center = true;
 
+        let mut player_calibration_positions = vec![];
+
         // functions
         const MIN_MOTOR: i32 = 0;
         const MAX_MOTOR: i32 = 330;
@@ -772,7 +857,16 @@ fn main() {
                 let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
                 let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
                 let x = m * y + b;
-                // println!("sending: y: {y}");
+
+                // new formula to convert from pixel y to motor
+                //    Polynomial Fit Equation (Degree 3): -0.0003773890x^3 + 0.3039691823x^2 + -82.8980917103x^1 + 7896.3566911102
+                // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
+                let y = y as f64;
+                let x = -0.0003773890 * y.powi(3) + 0.3039691823 * y.powi(2) - 82.8980917103 * y + 7896.3566911102;
+                let x = x as i32;
+                // println!("y: {y}, x: {x}");
+
+                // println!("sending: y: {x}");
                 if !paused_player {
                     arduino_com.send_string(&format!("{}", x as i32));
                     *last_command = Instant::now();
@@ -807,6 +901,13 @@ fn main() {
                     }
                     Reset => {
                         arduino_com.send_string("full_reset");
+                        let mut output = "".to_string();
+                        while !output.starts_with("end") {
+                            output = arduino_com.read_line();
+                            // println!("f{:?}f", output.chars().collect::<Vec<char>>());
+                            println!("{}", output);
+                        }
+                        println!("Finished full reset!");
                     }
                     Stop => {
                         break;
@@ -829,6 +930,44 @@ fn main() {
                     MoveCenter => {
                         move_center(&mut arduino_com, &mut last_command, 0, pause_player);
                         moved_to_center = true;
+                    }
+                    PlayerCalibration(pos) => {
+                        if pos == -1 {
+                            println!("Player calibration started");
+                            arduino_com.send_string("full_reset");
+                            let mut output = "".to_string();
+                            while !output.starts_with("end") {
+                                output = arduino_com.read_line();
+                                // println!("f{:?}f", output.chars().collect::<Vec<char>>());
+                                println!("{}", output);
+                            }
+                            println!("Finished full reset!");
+                        } else {
+                            //     println!("Sending pos: {}", pos);
+                            //     // arduino_com.send_string(&format!("{}", pos));
+                            //     arduino_com.send_string("check 20");
+                            //     std::thread::sleep(std::time::Duration::from_secs(2));
+                            // arduino_com.read_everything();
+                            arduino_com.send_string("I");
+                            let output = arduino_com.read_line();
+                            println!("o: {}", output);
+                            // output format:    Pos: 32
+                            let pos = output
+                                .split_whitespace()
+                                .nth(1)
+                                .unwrap()
+                                .parse::<f32>()
+                                .unwrap();
+                            println!("pos: {}", pos);
+                            player_calibration_positions.push(pos as i32);
+                        }
+                    }
+                    FinishPlayerCalibration(positions) => {
+                        // todo
+                        println!("Player calibration finished");
+                        println!("player_calibration_positions: {:?}, len: {}\npositions: {:?}, len: {}", player_calibration_positions, player_calibration_positions.len(), positions, positions.len());
+                        println!("positions = [{}]", positions.iter().enumerate().map(|x| format!("[{}, {}]", player_calibration_positions[x.0], x.1)).collect::<Vec<String>>().join(", "));
+                        player_calibration_positions.clear();
                     }
                     _ => {
                         println!("Unknown command: {:?}", message);
@@ -948,16 +1087,16 @@ fn main() {
                             }
                             // println!("t: {t}, shoot_time: {}", shoot_time);
                             let intersection = intersection.0;
-                            move_y(
-                                intersection.x,
-                                intersection.y,
-                                &mut arduino_com,
-                                &mut last_command,
-                                &rl_comp,
-                                player_0,
-                                &mut player_target,
-                                pause_player,
-                            );
+                            // move_y(
+                            //     intersection.x,
+                            //     intersection.y,
+                            //     &mut arduino_com,
+                            //     &mut last_command,
+                            //     &rl_comp,
+                            //     player_0,
+                            //     &mut player_target,
+                            //     pause_player,
+                            // );
                             time_since_catch = Instant::now();
                             moved_to_center = false;
                         } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center

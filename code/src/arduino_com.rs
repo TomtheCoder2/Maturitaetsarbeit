@@ -139,4 +139,18 @@ impl ArduinoCom {
         }
         buffer
     }
+
+    pub fn read_everything(&mut self) -> String {
+        let mut buffer = String::new();
+        loop {
+            let mut buf = [0; 1];
+            let res = self.serial.read(&mut buf);
+            if res.is_err() {
+                break;
+            }
+            let c = buf[0] as char;
+            buffer.push(c);
+        }
+        buffer
+    }
 }
