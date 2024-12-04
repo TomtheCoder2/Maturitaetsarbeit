@@ -1,5 +1,5 @@
 % Preamble
-\documentclass[11pt]{report}
+\documentclass[11pt,openany]{book}
 \usepackage[a4paper, total={6in, 8in},headsep=1cm]{geometry}
 
 % Packages
@@ -30,7 +30,6 @@
 %}
 
 \DeclareFieldFormat{urldate}{\mkbibparens{\bibstring{last visited on}\space#1}}
-
 
 
 % rust formatting
@@ -124,7 +123,6 @@
     string=[b]"
 }
 
-
 % get name of current section
 \makeatletter
 \newcommand*{\currentname}{\@currentlabelname}
@@ -150,7 +148,23 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 \tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=green!30]
 \tikzstyle{arrow} = [thick,->,>=stealth]
 
-\title{Matura Project}
+% #1 number of teeth
+% #2 radius intern
+% #3 radius extern
+% #4 angle from start to end of the first arc
+% #5 angle to decale the second arc from the first
+\newcommand{\gear}[5]{%
+    \foreach \i in {1,...,#1} {%
+        [rotate=(\i-1)*360/#1]
+        (0:#2) arc (0:#4:#2)
+        [rounded corners=1.5pt]
+        -- (#4+#5:#3)
+        arc (#4+#5:360/#1-#5:#3)
+        -- (360/#1:#2)
+    }
+}
+
+\title{Matura Project\\ Foosball goalkeeper robot}
 \author{Jan Wilhelm}
 \date\today
 
@@ -166,10 +180,11 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 }
 \newcommand{\todo}[1]{\begin{center}\cfbox{red}{\textcolor{red}{Todo: #1}}\end{center}}
 
-\oddsidemargin=-1.5cm
+\oddsidemargin=-1cm
+\evensidemargin=-1cm
 \voffset=-1.7cm
 \textheight=26cm
-\textwidth=19cm
+\textwidth=18cm
 
 
 
@@ -195,6 +210,9 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \renewcommand{\headrulewidth}{0.2pt}
     \renewcommand{\footrulewidth}{0.2pt}}
 \pagestyle{plain}
+
+
+%\linespread{1.8}
 
 
 % Document
@@ -230,6 +248,9 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \chapter{Software}\label{ch:software}
     \input{software}
 
+    \chapter{Results}\label{ch:results}
+    \todo{Finish project to get lates results}
+
 
     \chapter{Conclusion}\label{ch:conclusion}
 
@@ -248,6 +269,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
     \section{References}\label{sec:references}
 
+    \todo{Fix the 0's, idk why it doesnt work...}
     \printbibliography
 %    \newpage
 %    \bibliographystyle{unsrt}
@@ -260,7 +282,8 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 %    \nocite{*}
 
 
-    \section{Appendix}\label{sec:appendix}
+    \chapter{Appendix}\label{ch:appendix}
+    \input{appendix}
 
 \end{document}
 

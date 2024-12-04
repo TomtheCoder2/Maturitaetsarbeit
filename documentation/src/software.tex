@@ -7,39 +7,38 @@ This task can be split into the following chapters:
     \item \textbf{Prediction}: Predicting the ball movement
     \item \textbf{Controlling the motors}: Finally, moving the motors to the correct position
 \end{itemize}
-A schematic of the whole process can be seen here:
-% camera - undistortion - ball detection - prediction where the ball will be (y coordinate of the ball when it reaches the player) - motor control
-%                                        |-predict when the ball will reach the player
+A flowchart of the general process can be seen here:
+% camera - undistortion - ball detection - prediction where the ball will be (y coordinate of the ball when it reaches the player) - target player position -|
+%                                        |-predict when the ball will reach the player - shoot the ball                                                     -- Arduino
 %                                        |-live feed to gui for debugging
 %
 
 \begin{center}
     \begin{tikzpicture}[node distance=2cm]
         \node (in1) [io] {Camera};
-        \node (pro1) [process, below of=in1] {Image processing};
-        \node (pro2) [process, below of=pro1] {Ball detection and prediction};
-        \node (pro3) [process, below of=pro2] {Arduino};
-        \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {CNC shield};
-        \node (pro5) [process, below of=pro4] {DRV8825};
-        \node (out1) [io, below of=pro5] {Stepper Motor};
-        \node (pro6) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {L298N};
-        \node (out2) [io, below of=pro6] {DC Motor};
+        \node (pro1) [process, below of=in1] {Undistortion};
+        \node (pro2) [process, below of=pro1] {Ball detection};
+        \node (pro3) [process, below of=pro2] {Prediction};
+        \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {Timing?};
+        \node (pro5) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {Location?};
+        \node (out1) [io, below of=pro5, right of=pro5, xshift=1.5cm] {Arduino};
 
         % arrows
         \draw [arrow] (in1) -- (pro1);
         \draw [arrow] (pro1) -- (pro2);
         \draw [arrow] (pro2) -- (pro3);
         \draw [arrow] (pro3) |- (pro4);
-        \draw [arrow] (pro4) -- (pro5);
-        \draw [arrow] (pro5) -- (out1);
-        \draw [arrow] (pro3) |- (pro6);
-        \draw [arrow] (pro6) -- (out2);
-%        make box around pro1 and pro2 as they are on the computer
-        \draw[red,thick] ($(pro1.north west)+(-1.3,0.6)$)  rectangle ($(pro2.south east)+(0.3,-0.3)$) node[right,midway, xshift=3cm] {Software (Chapter~\ref{ch:software})};
-%       make box from pro6 to out1
-        \draw[red,thick] ($(pro6.north west)+(-1,2.3)$)  rectangle ($(out1.south east)+(2.3,-0.3)$) node[below,midway, yshift=-4cm] {Electronics (Chapter~\ref{ch:electronics})};
+        \draw [arrow] (pro3) |- (pro5);
+        \draw [arrow] (pro4) |- (out1) node[below,midway] {Target player position};
+        \draw [arrow] (pro5) |- (out1) node[below,midway] {Shoot the ball};
+
+%%        make box around pro1 and pro2 as they are on the computer
+%        \draw[red,thick] ($(pro1.north west)+(-1.3,0.6)$)  rectangle ($(pro2.south east)+(0.3,-0.3)$) node[right,midway, xshift=3cm] {Software (Chapter~\ref{ch:software})};
+%%       make box from pro6 to out1
+%        \draw[red,thick] ($(pro6.north west)+(-1,2.3)$)  rectangle ($(out1.south east)+(2.3,-0.3)$) node[below,midway, yshift=-4cm] {Electronics (Chapter~\ref{ch:electronics})};
     \end{tikzpicture}
 \end{center}
+The whole flowchart can be seen in the appendix~\ref{subsec:whole-flowchart}.
 
 
 \section{Optics}\label{sec:optics}
@@ -62,23 +61,50 @@ OpenCV is a library that provides many functions for image processing, one of th
 The function takes the images of the checkerboard pattern and calculates the distortion coefficients and the camera matrix.
 
 The key principal is to map the distorted image to an undistorted image; this is done by calculating the pixel coordinates of the undistorted image for each pixel in the distorted image.
-The Formulas for this are:
+The formulas for this are:\autocite{opencv-undistort}
 \begin{itemize}
     \item \textbf{Radial distortion:} This is the distortion that makes straight lines appear curved:
     \begin{gather*}
-        R^2 = x^2 + y^2\\
+        r^2 = x^2 + y^2\\
         x_{\text{radial}} = x(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
         y_{\text{radial}} = y(1 + k_1 r^2 + k_2 r^4 + k_3 r^6)\\
     \end{gather*}
+    Where \(x,y\) are the normalized pixel coordinates in the undistorted image and \( k_1, k_2, k_3 \) are the radial distortion coefficients.
+    An example can be seen here:
+    \begin{figure}[H]
+%        \centering
+%        \begin{subfigure}[!htb]{0.5\textwidth}
+        \centering
+        \begin{tikzpicture}% based on https://tex.stackexchange.com/a/9561/ (Caramdir's fantastic answer to another question)
+            \node (tiger) [anchor=north west, inner sep=0pt] {\includegraphics[width=0.5\textwidth]{../photos/radial_distortion}};
+            \begin{scope}
+                [x={(tiger.north east)},y={(tiger.south west)}]
+%                    \foreach \i/\j in {{(0.23,1.05)/(0.25,-.1)},{(0.54,1.1)/(0.5,-.15)},{(0.76,1.05)/(0.8,-0.1)}}
+%                    \draw [red, thick] \i -- \j;
+%                    big rect: 28, 89 - 25, 479 - 698, 495 - 713, 101
+%small rect: 281, 219 - 272, 375 - 432, 386 - 440, 228
+%
+%dimensions: 728, 544
+                \draw [red, thick] (0.0384615385, 0.1636029412) -- (0.0343406593, 0.8805147059) -- (698/728, 495/544) -- (713/728, 101/544) -- cycle;
+                \draw [red, thick] (281/728, 219/544) -- (272/728, 375/544) -- (432/728, 386/544) -- (440/728, 228/544) -- cycle;
+            \end{scope}
+        \end{tikzpicture}
+        \caption{Radial distortion}
+        \label{fig:radial_distortion}
+%        \end{subfigure}
+    \end{figure}
+
+
     \item \textbf{Tangential distortion:} This distortion occurs because the lens and the image sensor are not perfectly parallel.
     \begin{gather*}
-        X_{\text{tangential}} = 2p_1 xy + p_2(r^2 + 2x^2)\\
+        x_{\text{tangential}} = 2p_1 xy + p_2(r^2 + 2x^2)\\
         y_{\text{tangential}} = p_1(r^2 + 2y^2) + 2p_2 xy\\
     \end{gather*}
+    Where \( p_1, p_2 \) are the tangential distortion coefficients.
 \end{itemize}
-Together that gives:
+Together that yields:
 \begin{gather*}
-    X' = x_{\text{radial}} + x_{\text{tangential}}\\
+    x' = x_{\text{radial}} + x_{\text{tangential}}\\
     y' = y_{\text{radial}} + y_{\text{tangential}}\\
 \end{gather*}
 Finally, the undistorted pixel positions are transformed back to image coordinates using the camera matrix \( K \):
@@ -102,23 +128,21 @@ Where $K$ is the camera matrix:
             0   & f_y & c_y \\
             0   & 0   & 1
     \end{bmatrix}\\
-    Where:
 \end{center}
+Where:
 \begin{itemize}
     \item $f_x$ and $f_y$ are the focal lengths along the x and y axes (in pixels),
     \item $c_x$ and $c_y$ are the coordinates of the optical center (principal point), typically at the center of the image.
 \end{itemize}
-These formulas allow the distorted image points to be remapped to undistorted coordinates.
+These formulas allow the distorted image points to be remapped to undistorted coordinates.\autocite{opencv-undistort}
 
 \subsubsection{Implementation}\label{subsubsec:implementation}
-
-
-Using the undistort function provided by opencv is not fast enough for our needs, because the program only has 3ms to do the whole image processing and motor controlling.
+Using the undistort function provided by openCV\autocite{opencv-undistort} is not fast enough for our needs, because the program only has 3ms to do the whole image processing and motor controlling.
 So I wrote a custom function that generates a table where the index for each pixel in the new image is stored, so the function doesnt have to calculate the pixel coordinate for the undistorted image each time when the function is called.
 The rust function to get the coordinates $x_{\text{original}},y_{\text{original}}$ of a pixel at $x_{\text{undistorted}},y_{\text{undistorted}}$ in the distorted (original) image looks like this:
 
 
-
+\todo{Should i move these code snippets into the appendix?}
 \begin{lstlisting}[language=rust,breaklines,label={lst:distort_coords}]
 /// Calculate the distorted coordinates given undistorted image coordinates.
 fn distort_coords(x: f64, y: f64, fx: f64, fy: f64, cx: f64, cy: f64) -> (f64, f64) {
@@ -299,6 +323,7 @@ The cropped example image looks like this:
     \label{fig:example8_cropped}
 \end{figure}
 
+\todo{Move parts of this chapter into appendix}
 \subsection{Real World Coordinates}\label{subsec:real-world-coordinates}
 An important part of the software is to convert the pixel coordinates to real-world coordinates.
 This is done by adding fiducials (markers that are known to be at a specific position) to the table.
@@ -342,7 +367,7 @@ Therefore i wrote a Java program to generate about 250 labeled images to train t
 An image containing all the fiducials looks like this (the red point shows the midpoint of the fiducial):
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{../photos/training_whole_general_image}
+    \includegraphics[width=0.5\textwidth]{../photos/training_whole_general_image}
     \caption[fiducials]{Training fiducials}
     \label{fig:fiducials}
 \end{figure}
@@ -353,7 +378,7 @@ The different parts can be seen here:
     \centering
     \begin{tikzpicture}
         % Include the image
-        \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=0.8\textwidth]{../photos/base_img}};
+        \node[anchor=south west, inner sep=0] (image) at (0,0) {\includegraphics[width=0.5\textwidth]{../photos/base_img}};
         \begin{scope}
             [x={(image.south east)}, y={(image.north west)}]
             % vertical lines (6 parts)
@@ -420,7 +445,7 @@ But having the pixel coordinates is not very useful, so the program has to conve
 To compute the real world coordinates, the program compares the pixel coordinates of the ball to the pixel coordinates of the fiducials.
 I need the real world coordinates to move the motors to the correct position as it is possible that the camera moves or the table moves, so the pixel coordinates are not reliable.
 I measured the distance between the walls and the fiducials and made a coordinate system so that the fiducial with the number 2 lies in the top left corner (0,0) and the other fiducials are placed accordingly.
-Then, to compute the real world coordinates, I use a homography matrix to transform the pixel coordinates to real world coordinates.
+Then, to compute the real world coordinates, I use a homography\autocite{homography} matrix to transform the pixel coordinates to real world coordinates.
 
 
 \section{Homography Calculation}\label{sec:homography-calculation}
@@ -492,13 +517,14 @@ The line of the ball can be computed with the current position $\vec{r}$, the cu
         \end{bmatrix}\\
 %    let t = (x - self.position.x) / self.velocity.x;
 %        Some(self.position + self.velocity * t)
-        T &= \frac{p_x - r_x}{v_x}\\
+        t &= \frac{p_x - r_x}{v_x}\\
         \vec{r}_\text{intersection} &= \vec{r} + \vec{v} \cdot t
     \end{split}\label{eq:ball_intersection}
 \end{equation}
-Now I only have to convert the $\vec{r}_\text{intersection}$ to real world coordinates and I get the position where the ball will end up, which the program sends to the arduino to move the stepper motor to this position.
+Now I only have to convert the $\vec{r}_\text{intersection}$ to real world coordinates and I get the position where the ball will end up, which the program sends to the arduino to move the goalkeeper to this position.
 
 
+\todo{Can be removed, and link to electronics chapter, correct?}
 \section{Controlling the motors}\label{sec:controlling-the-motors}
 To control the motors I use an Arduino Mega 2560, because it has enough pins to control all the motors at once.
 The Arduino is connected to the computer via USB, and the computer sends the motor positions to the Arduino via serial communication.
