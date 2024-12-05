@@ -1,5 +1,6 @@
 use matura::compute_rl_coords::RLCompute;
 use std::f32::consts::PI;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI32;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{mpsc, Mutex};
@@ -28,7 +29,6 @@ pub enum Command {
     Pause,
     Reset,
     ReloadRaw,
-    PausePlayer(bool),
     MoveCenter,
     PlayerCalibration(i32),
     FinishPlayerCalibration(Vec<i32>),
@@ -462,43 +462,42 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.overlay_ball, "Overlay Ball");
                 ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
                 if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
-                    self.sender.send(Command::PausePlayer(self.pause_player));
+                    PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
                 }
                 if matches!(self.mode, Mode::PlayerCalibration) {
                     ui.label("Click on Player!");
                     if self.player_calibration_message.len() > 0 {
                         ui.label(&self.player_calibration_message);
                     }
-                    if ui.button("Next").clicked() || ui.input(|ui| ui.key_pressed(egui::Key::S)){
+                    if ui.button("Next").clicked() || ui.input(|ui| ui.key_pressed(egui::Key::S)) {
                         if self.click_position.is_none() {
                             self.player_calibration_message = "Click on the player!".to_string();
                         } else {
-                            self.player_calibration_message = "".to_string();
                             let pos = self.click_position.unwrap();
                             let posy = pos.y as i32;
-                            if self.player_calibration_pos >= 0 {
-                                self.final_player_calibration_positions.push(posy);
-                            }
+                            self.player_calibration_message = format!("pos: {}, {}/{}", posy, self.player_calibration_pos, POS.len());
+                            // if self.player_calibration_pos >= 0 {
+                            self.final_player_calibration_positions.push(posy);
+                            // }
                             println!("Player pos: y:{}", posy);
                             self.player_calibration_pos += 1;
-                            if self.player_calibration_pos >= POS.len() as i32 {
+                            self.sender.send(Command::PlayerCalibration(POS[self.player_calibration_pos as usize]));
+                            if self.player_calibration_pos >= POS.len() as i32 - 1 {
                                 self.mode = Mode::Normal;
                                 println!("Player calibration finished");
                                 println!("pos: {:?}", self.final_player_calibration_positions);
                                 println!("Player calibration positions: {}", self.final_player_calibration_positions.iter().enumerate().map(|(i, x)| format!("\t{}: {}: {}\n", i, POS[i], x)).collect::<Vec<String>>().join(""));
                                 self.sender.send(Command::FinishPlayerCalibration(self.final_player_calibration_positions.clone()));
-                                self.sender.send(Command::PausePlayer(false));
+                                PAUSEPLAYER.store(false, Ordering::Relaxed);
                                 self.pause_player = false;
-                            } else {
-                                self.sender.send(Command::PlayerCalibration(POS[self.player_calibration_pos as usize]));
-                            }
+                            } else {}
                         }
                     }
                 } else {
                     if ui.button("Player Calibration").clicked() {
                         self.mode = Mode::PlayerCalibration;
                         self.player_calibration_pos = -1;
-                        self.sender.send(Command::PausePlayer(true));
+                        PAUSEPLAYER.store(true, Ordering::Relaxed);
                         self.pause_player = true;
                         self.sender.send(Command::PlayerCalibration(-1));
                         self.final_player_calibration_positions.clear();
@@ -629,6 +628,7 @@ impl App {
         app.sender = tx;
         // send current exposure to camera
         app.sender.send(Command::Exposure(app.exposure)).unwrap();
+        PAUSEPLAYER.store(app.pause_player, Ordering::Relaxed);
         if app.paused {
             app.sender.send(Command::Pause).unwrap();
         } else {
@@ -815,7 +815,7 @@ fn main() {
 
         // functions
         const MIN_MOTOR: i32 = 0;
-        const MAX_MOTOR: i32 = 330;
+        const MAX_MOTOR: i32 = 400;
         const MIN_PIXEL: i32 = 226;
         const MAX_PIXEL: i32 = 350;
         fn move_y(
@@ -859,14 +859,14 @@ fn main() {
                 let x = m * y + b;
 
                 // new formula to convert from pixel y to motor
-                //    Polynomial Fit Equation (Degree 3): -0.0003773890x^3 + 0.3039691823x^2 + -82.8980917103x^1 + 7896.3566911102
                 // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
                 let y = y as f64;
-                let x = -0.0003773890 * y.powi(3) + 0.3039691823 * y.powi(2) - 82.8980917103 * y + 7896.3566911102;
+                let x = -0.0000061786 * y.powi(3) + 0.0028739755 * y.powi(2) + -2.7747761660 * y.powi(1) + 925.4904776729;
                 let x = x as i32;
                 // println!("y: {y}, x: {x}");
 
                 // println!("sending: y: {x}");
+                let paused_player = PAUSEPLAYER.load(Ordering::Relaxed);
                 if !paused_player {
                     arduino_com.send_string(&format!("{}", x as i32));
                     *last_command = Instant::now();
@@ -879,12 +879,16 @@ fn main() {
             player_0: i32,
             paused_player: bool,
         ) {
-            // let y = (MIN_PIXEL + MAX_PIXEL) as f32 / 2.;
-            if !paused_player && last_command.elapsed().as_secs_f32() > 0.05 {
-                arduino_com.send_string(&format!("{}", 212 as i32));
-                *last_command = Instant::now();
+            if !PAUSEPLAYER.load(Ordering::Relaxed) {
+                let y = (MIN_PIXEL + MAX_PIXEL) as f32 / 2.;
+                if last_command.elapsed().as_secs_f32() > 0.05 {
+                    println!("Moving to center");
+                    // arduino_com.send_string(&format!("{}", 212 as i32));
+                    move_y(0., y, arduino_com, last_command, &RLCompute::new(), player_0, &mut 0, paused_player);
+                    arduino_com.send_string(&"check 10".to_string());
+                    *last_command = Instant::now();
+                }
             }
-            arduino_com.send_string(&format!("check 5"));
         }
 
         loop {
@@ -924,9 +928,6 @@ fn main() {
                         let raw_image1 = raw_image1.as_slice();
                         // raw_image = raw_image1.clone();
                     }
-                    PausePlayer(pause) => {
-                        pause_player = pause;
-                    }
                     MoveCenter => {
                         move_center(&mut arduino_com, &mut last_command, 0, pause_player);
                         moved_to_center = true;
@@ -939,7 +940,7 @@ fn main() {
                             while !output.starts_with("end") {
                                 output = arduino_com.read_line();
                                 // println!("f{:?}f", output.chars().collect::<Vec<char>>());
-                                println!("{}", output);
+                                println!("o: {}", output);
                             }
                             println!("Finished full reset!");
                         } else {
@@ -965,8 +966,25 @@ fn main() {
                     FinishPlayerCalibration(positions) => {
                         // todo
                         println!("Player calibration finished");
-                        println!("player_calibration_positions: {:?}, len: {}\npositions: {:?}, len: {}", player_calibration_positions, player_calibration_positions.len(), positions, positions.len());
-                        println!("positions = [{}]", positions.iter().enumerate().map(|x| format!("[{}, {}]", player_calibration_positions[x.0], x.1)).collect::<Vec<String>>().join(", "));
+                        println!(
+                            "player_calibration_positions: {:?}, len: {}\npositions: {:?}, len: {}",
+                            player_calibration_positions,
+                            player_calibration_positions.len(),
+                            positions,
+                            positions.len()
+                        );
+                        println!(
+                            "positions = [{}]",
+                            positions
+                                .iter()
+                                .enumerate()
+                                .map(|x| format!(
+                                    "[{}, {}]",
+                                    player_calibration_positions[x.0], x.1
+                                ))
+                                .collect::<Vec<String>>()
+                                .join(", ")
+                        );
                         player_calibration_positions.clear();
                     }
                     _ => {
@@ -1074,7 +1092,6 @@ fn main() {
                         // last_command = Instant::now();
                     }
 
-
                     if ball_comp.velocity.x < 0.0 && ball_comp.velocity.magnitude() > 20. {
                         // the ball goes towards the goal
                         let intersection = ball_comp.intersection_x(44.);
@@ -1087,30 +1104,29 @@ fn main() {
                             }
                             // println!("t: {t}, shoot_time: {}", shoot_time);
                             let intersection = intersection.0;
-                            // move_y(
-                            //     intersection.x,
-                            //     intersection.y,
-                            //     &mut arduino_com,
-                            //     &mut last_command,
-                            //     &rl_comp,
-                            //     player_0,
-                            //     &mut player_target,
-                            //     pause_player,
-                            // );
+                            move_y(
+                                intersection.x,
+                                intersection.y,
+                                &mut arduino_com,
+                                &mut last_command,
+                                &rl_comp,
+                                player_0,
+                                &mut player_target,
+                                pause_player,
+                            );
                             time_since_catch = Instant::now();
                             moved_to_center = false;
-                        } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center
-                        {
-                            // move_center(
-                            //     &mut arduino_com,
-                            //     &mut last_command,
-                            //     player_0,
-                            //     pause_player,
-                            // );
+                        } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center {
+                            move_center(
+                                &mut arduino_com,
+                                &mut last_command,
+                                player_0,
+                                pause_player,
+                            );
                             moved_to_center = true;
                         }
                     } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center {
-                        // move_center(&mut arduino_com, &mut last_command, player_0, pause_player);
+                        move_center(&mut arduino_com, &mut last_command, player_0, pause_player);
                         moved_to_center = true;
                     }
 
@@ -1133,16 +1149,16 @@ fn main() {
                         // arduino_com.send_string(&format!("{}", x as i32));
                         // last_command = Instant::now();
                     }
-                    move_y(
-                        ball.0 as f32,
-                        ball.1 as f32,
-                        &mut arduino_com,
-                        &mut last_command,
-                        &rl_comp,
-                        0,
-                        &mut player_target,
-                        pause_player,
-                    );
+                    // move_y(
+                    //     ball.0 as f32,
+                    //     ball.1 as f32,
+                    //     &mut arduino_com,
+                    //     &mut last_command,
+                    //     &rl_comp,
+                    //     0,
+                    //     &mut player_target,
+                    //     pause_player,
+                    // );
                     if frame_counter % 1 == 0 {
                         // save to IMAGE_BUFFER
                         let mut buffer = IMAGE_BUFFER.lock().unwrap();
@@ -1232,3 +1248,4 @@ fn main() {
 // x, y, time, used
 pub static ACTUAL_PLAYER_POSITION: Mutex<(u32, u32, f32, bool)> = Mutex::new((0, 0, 0., false));
 pub static PLAYER_DETECTION_FPS: AtomicI32 = AtomicI32::new(0);
+pub static PAUSEPLAYER: AtomicBool = AtomicBool::new(false);
