@@ -1,3 +1,4 @@
 ./code/target/
 documentation/out/
 /documentation/output/**
+/arduino_code/target/
