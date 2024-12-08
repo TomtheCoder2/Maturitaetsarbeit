@@ -32,6 +32,8 @@ pub enum Command {
     MoveCenter,
     PlayerCalibration(i32),
     FinishPlayerCalibration(Vec<i32>),
+    Shoot,
+    ResetDC,
 }
 
 #[derive(Debug)]
@@ -76,6 +78,7 @@ pub struct App {
     overlay_ball: bool,
     show_player_predicition: bool,
     pause_player: bool,
+    pause_shooting: bool,
     #[serde(skip)]
     click_position: Option<egui::emath::Vec2>,
     #[serde(skip)]
@@ -85,6 +88,7 @@ pub struct App {
     final_player_calibration_positions: Vec<i32>,
     #[serde(skip)]
     player_calibration_message: String,
+    followball: bool
 }
 
 const POS: [i32; 7] = [50, 100, 150, 200, 250, 300, 350];
@@ -117,11 +121,13 @@ impl Default for App {
             overlay_ball: true,
             show_player_predicition: true,
             pause_player: false,
+            pause_shooting: false,
             click_position: None,
             mode: Mode::Normal,
             player_calibration_pos: 0,
             final_player_calibration_positions: Vec::new(),
             player_calibration_message: "".to_string(),
+            followball: false
         }
     }
 }
@@ -442,8 +448,20 @@ impl eframe::App for App {
                     // self.arduino_com.send_string("R");
                     self.sender.send(Reset).unwrap();
                 }
+                if ui.button("Reset DC").clicked() {
+                    self.sender.send(Command::ResetDC).unwrap();
+                }
                 if ui.button("Move to center").clicked() {
                     self.sender.send(Command::MoveCenter).unwrap();
+                }
+                if ui.button("Shoot").clicked() {
+                    self.sender.send(Command::Shoot).unwrap();
+                }
+                if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
+                    PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
+                }
+                if ui.checkbox(&mut self.pause_shooting, "Pause shooting").clicked() {
+                    PAUSEPLAYER.store(self.pause_shooting, Ordering::Relaxed);
                 }
             });
             ui.horizontal(|ui| {
@@ -461,8 +479,8 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
                 ui.checkbox(&mut self.overlay_ball, "Overlay Ball");
                 ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
-                if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
-                    PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
+                if ui.checkbox(&mut self.followball, "Follow Ball").clicked() {
+                    FOLLOWBALL.store(self.followball, Ordering::Relaxed);
                 }
                 if matches!(self.mode, Mode::PlayerCalibration) {
                     ui.label("Click on Player!");
@@ -629,6 +647,8 @@ impl App {
         // send current exposure to camera
         app.sender.send(Command::Exposure(app.exposure)).unwrap();
         PAUSEPLAYER.store(app.pause_player, Ordering::Relaxed);
+        FOLLOWBALL.store(app.followball, Ordering::Relaxed);
+        PAUSESHOOTING.store(app.pause_shooting, Ordering::Relaxed);
         if app.paused {
             app.sender.send(Command::Pause).unwrap();
         } else {
@@ -861,7 +881,7 @@ fn main() {
                 // new formula to convert from pixel y to motor
                 // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
                 let y = y as f64;
-                let x = -0.0000061786 * y.powi(3) + 0.0028739755 * y.powi(2) + -2.7747761660 * y.powi(1) + 925.4904776729;
+                let x = 0.0000601299 * y.powi(3) + -0.0499176837 * y.powi(2) + 10.8474743402 * y.powi(1) + -205.7294258740;
                 let x = x as i32;
                 // println!("y: {y}, x: {x}");
 
@@ -882,7 +902,7 @@ fn main() {
             if !PAUSEPLAYER.load(Ordering::Relaxed) {
                 let y = (MIN_PIXEL + MAX_PIXEL) as f32 / 2.;
                 if last_command.elapsed().as_secs_f32() > 0.05 {
-                    println!("Moving to center");
+                    // println!("Moving to center");
                     // arduino_com.send_string(&format!("{}", 212 as i32));
                     move_y(0., y, arduino_com, last_command, &RLCompute::new(), player_0, &mut 0, paused_player);
                     arduino_com.send_string(&"check 10".to_string());
@@ -913,6 +933,9 @@ fn main() {
                         }
                         println!("Finished full reset!");
                     }
+                    ResetDC => {
+                        arduino_com.send_string("reset_dc");
+                    }
                     Stop => {
                         break;
                     }
@@ -931,6 +954,9 @@ fn main() {
                     MoveCenter => {
                         move_center(&mut arduino_com, &mut last_command, 0, pause_player);
                         moved_to_center = true;
+                    }
+                    Shoot => {
+                        arduino_com.send_string("S");
                     }
                     PlayerCalibration(pos) => {
                         if pos == -1 {
@@ -1066,6 +1092,12 @@ fn main() {
                         elapsed.as_secs_f32(),
                     );
                     let elapsed_ball_comp = ball_comp_t0.elapsed();
+                    if elapsed_ball_comp.as_secs_f32() * 1000.0 > 5. {
+                        println!(
+                            "warning: ball_comp: {:.2}ms",
+                            elapsed_ball_comp.as_secs_f32() * 1000.0
+                        );
+                    }
                     // println!(
                     // "ball_comp: {:.2}ms",
                     // elapsed_ball_comp.as_secs_f32() * 1000.0
@@ -1098,41 +1130,51 @@ fn main() {
                         if let Some(intersection) = intersection {
                             // println!("intersection: {:?}", intersection);
                             let t = intersection.1;
-                            shoot_time = t0.elapsed().as_secs_f32() + t;
-                            if t > 0. && ball_comp.velocity.magnitude() > 50.0 {
+                            let prepone = 0.25;
+                            if t > prepone && ball_comp.velocity.magnitude() > 50.0 {
+                                // println!("t: {}, v: {}, t0: {}, t0 + t: {}", t, ball_comp.velocity.magnitude(), t0.elapsed().as_secs_f32(), t0.elapsed().as_secs_f32() + t);
+                                shoot_time = t0.elapsed().as_secs_f32() + t - prepone;
                                 shot = false;
                             }
                             // println!("t: {t}, shoot_time: {}", shoot_time);
                             let intersection = intersection.0;
-                            move_y(
-                                intersection.x,
-                                intersection.y,
-                                &mut arduino_com,
-                                &mut last_command,
-                                &rl_comp,
-                                player_0,
-                                &mut player_target,
-                                pause_player,
-                            );
+                            if !FOLLOWBALL.load(Ordering::Relaxed) {
+                                move_y(
+                                    intersection.x,
+                                    intersection.y,
+                                    &mut arduino_com,
+                                    &mut last_command,
+                                    &rl_comp,
+                                    player_0,
+                                    &mut player_target,
+                                    pause_player,
+                                );
+                            }
                             time_since_catch = Instant::now();
-                            moved_to_center = false;
-                        } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center {
-                            move_center(
-                                &mut arduino_com,
-                                &mut last_command,
-                                player_0,
-                                pause_player,
-                            );
+                            moved_to_center = true;
+                        } else if time_since_catch.elapsed().as_secs_f32() > 0.2 && !moved_to_center {
+                            if !FOLLOWBALL.load(Ordering::Relaxed) {
+                                move_center(
+                                    &mut arduino_com,
+                                    &mut last_command,
+                                    player_0,
+                                    pause_player,
+                                );
+                            }
                             moved_to_center = true;
                         }
-                    } else if time_since_catch.elapsed().as_secs_f32() > 0.5 && !moved_to_center {
-                        move_center(&mut arduino_com, &mut last_command, player_0, pause_player);
+                    } else if time_since_catch.elapsed().as_secs_f32() > 0.2 && !moved_to_center {
+                        if !FOLLOWBALL.load(Ordering::Relaxed) {
+                            move_center(&mut arduino_com, &mut last_command, player_0, pause_player);
+                        }
                         moved_to_center = true;
                     }
 
                     // shoot
-                    if !shot && t0.elapsed().as_secs_f32() > shoot_time {
+                    if !shot && t0.elapsed().as_secs_f32() > shoot_time && !PAUSESHOOTING.load(Ordering::Relaxed)
+                    && !PAUSEPLAYER.load(Ordering::Relaxed) {
                         arduino_com.send_string("S");
+                        // println!("Shot!");
                         shot = true;
                     }
 
@@ -1149,16 +1191,18 @@ fn main() {
                         // arduino_com.send_string(&format!("{}", x as i32));
                         // last_command = Instant::now();
                     }
-                    // move_y(
-                    //     ball.0 as f32,
-                    //     ball.1 as f32,
-                    //     &mut arduino_com,
-                    //     &mut last_command,
-                    //     &rl_comp,
-                    //     0,
-                    //     &mut player_target,
-                    //     pause_player,
-                    // );
+                    if FOLLOWBALL.load(Ordering::Relaxed) {
+                        move_y(
+                            ball.0 as f32,
+                            ball.1 as f32,
+                            &mut arduino_com,
+                            &mut last_command,
+                            &rl_comp,
+                            0,
+                            &mut player_target,
+                            pause_player,
+                        );
+                    }
                     if frame_counter % 1 == 0 {
                         // save to IMAGE_BUFFER
                         let mut buffer = IMAGE_BUFFER.lock().unwrap();
@@ -1249,3 +1293,5 @@ fn main() {
 pub static ACTUAL_PLAYER_POSITION: Mutex<(u32, u32, f32, bool)> = Mutex::new((0, 0, 0., false));
 pub static PLAYER_DETECTION_FPS: AtomicI32 = AtomicI32::new(0);
 pub static PAUSEPLAYER: AtomicBool = AtomicBool::new(false);
+pub static PAUSESHOOTING: AtomicBool = AtomicBool::new(false);
+pub static FOLLOWBALL: AtomicBool = AtomicBool::new(false);
