@@ -10,10 +10,14 @@
         \node (when) [process, below of=prediction, left of=prediction, xshift=-1.5cm] {When?};
         \node (arduino) [process, below of=when, right of=when, xshift=1.5cm] {Arduino};
         \node (cnc) [process, below of=arduino, right of=arduino, xshift=1.5cm] {CNC shield};
+        \node (cnc-text)  [above of=cnc, yshift=-1cm] {Target player position};
         \node (drv) [process, below of=cnc] {DRV8825};
         \node (stepper) [io, below of=drv] {Stepper Motor};
+        \node (stepper-text) [below of=stepper, yshift=1cm] {Move side};
         \node (l298n) [process, below of=arduino, left of=arduino, xshift=-1.5cm] {L298N};
+        \node (shoot-text)  [above of=l298n, yshift=-1cm] {Shoot the ball};
         \node (dc) [io, below of=l298n] {DC Motor};
+        \node (dc-text) [below of=dc, yshift=1cm] {Shoot side};
 
         % arrows
         \draw [arrow] (cam) -- (undistortion);
@@ -21,8 +25,8 @@
         \draw [arrow] (ball_detection) -- (prediction);
         \draw [arrow] (prediction) |- (where);
         \draw [arrow] (prediction) |- (when);
-        \draw [arrow] (where) |- (arduino) node[below,midway] {Target player position};
-        \draw [arrow] (when) |- (arduino) node[below,midway] {Shoot the ball};
+        \draw [arrow] (where) |- (arduino);
+        \draw [arrow] (when) |- (arduino);
 
         \draw [arrow] (arduino) |- (cnc);
         \draw [arrow] (cnc) -- (drv);
@@ -34,9 +38,9 @@
         \coordinate (corner1) at ([xshift=-0.3cm]when.west |- undistortion.north);
 
 
-%%        make box around undistortion and ball_detection as they are on the computer
+%        make box around undistortion and ball_detection as they are on the computer
         \draw[red,thick] ($(where.south east)+(0.3,-0.3)$) rectangle ([xshift=-0.3cm, yshift=0.3cm]when.west |- undistortion.north) node[above, xshift=2cm] {Software (Chapter~\ref{ch:software})};
-%%       make box from arduino to stepper
-        \draw[red,thick] ([xshift=-0.9cm, yshift=0.3cm]l298n.west |- arduino.north)  rectangle ($(stepper.south east)+(2.3,-0.3)$) node[below,midway, yshift=-4cm] {Electronics (Chapter~\ref{ch:electronics})};
+%       make box from l298n to stepper
+        \draw[red,thick] ($(l298n.north west)+(-1,2.3)$)  rectangle ($(stepper.south east)+(2.3,-0.9)$) node[below,midway, yshift=-4cm] {Electronics (cf. Chapter~\ref{ch:electronics})};
     \end{tikzpicture}
 \end{center}

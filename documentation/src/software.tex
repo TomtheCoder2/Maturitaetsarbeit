@@ -185,7 +185,7 @@ fn distort_coords(x: f64, y: f64, fx: f64, fy: f64, cx: f64, cy: f64) -> (f64, f
 }
 \end{lstlisting}
 Where \texttt{DIST\_COEFFS} are the distortion coefficients calculated by the OpenCV calibration function.
-To generate the table, I used the following code:
+To generate the table, I created the following code:
 \begin{lstlisting}[language=rust,breaklines,label={lst:gen_table}]
 /// Generate precomputation table for undistortion.
 pub fn gen_table(
@@ -232,7 +232,7 @@ This generates a long vector with the corresponding index for each pixel in the 
 
 Using the table is as simple as just looking up the index for the pixel in the undistorted image and copying the pixel values from the original image to the new image.
 This function is called for each frame, and the result is a corrected image with no distortion.
-The Code can be seen here:
+The code can be seen here:
 \begin{lstlisting}[language=rust,breaklines,label={lst:undistort_image_table}]
 /// Undistort an image using the precomputed table.
 pub fn undistort_image_table(
@@ -293,13 +293,13 @@ This effect can also be seen in some example footage of the table:
     \centering
     \begin{subfigure}{.5\textwidth}
         \centering
-        \includegraphics[width=.8\textwidth]{../photos/original_example8}
+        \includegraphics[width=.8\textwidth]{../photos/original_example12}
         \caption[originalRainbow]{Original image}
         \label{fig:original_example8}
     \end{subfigure}%
     \begin{subfigure}{.5\textwidth}
         \centering
-        \includegraphics[width=.8\textwidth]{../photos/output8}
+        \includegraphics[width=.8\textwidth]{../photos/output12}
         \caption[originalRainbow]{Undistorted image}
         \label{fig:undistorted_example8}
     \end{subfigure}
@@ -319,7 +319,7 @@ The GUI is also written in rust using the egui\autocite{egui} library.
 The cropped example image looks like this:
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{../photos/example8_cropped}
+    \includegraphics[width=0.8\textwidth]{../photos/output12_cropped}
     \caption[croppedexampleimage]{Cropped example image}
     \label{fig:example8_cropped}
 \end{figure}
@@ -526,15 +526,15 @@ The line of the ball can be computed with the current position $\vec{r}$, the cu
 \end{equation}
 Now I only have to convert the $\vec{r}_\text{intersection}$ to real world coordinates and I get the position where the ball will end up, which the program sends to the arduino to move the goalkeeper to this position.
 
-
-\todo{Can be removed, and link to electronics chapter, correct?}
-\section{Controlling the motors}\label{sec:controlling-the-motors}
-To control the motors I use an Arduino Mega 2560, because it has enough pins to control all the motors at once.
-The Arduino is connected to the computer via USB, and the computer sends the motor positions to the Arduino via serial communication.
-
-\subsubsection{Controlling the DC-Motor}\label{subsubsec:controlling-the-dc-motor}
-The DC-Motor is controlled by the stepper motor driver L298N as seen in Chapter~\ref{ch:electronics}.
-
+%
+%\todo{Can be removed, and link to electronics chapter, correct?}
+%\section{Controlling the motors}\label{sec:controlling-the-motors}
+%To control the motors I use an Arduino Mega 2560, because it has enough pins to control all the motors at once.
+%The Arduino is connected to the computer via USB, and the computer sends the motor positions to the Arduino via serial communication.
+%
+%\subsubsection{Controlling the DC-Motor}\label{subsubsec:controlling-the-dc-motor}
+%The DC-Motor is controlled by the stepper motor driver L298N as seen in Chapter~\ref{ch:electronics}.
+%
 
 
 

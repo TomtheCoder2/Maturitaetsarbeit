@@ -15,21 +15,21 @@ A simple diagramm of the final system can be seen here:
 % create a simple drawing of the system
 \begin{center}
     \begin{tikzpicture}
-        \draw (7, 10) rectangle (0, 0);
+        \draw[fill=green!5] (7, 10) rectangle (0, 0);
         \begin{scope}
             [shift={(3.5, 0)}]
             \node[below] {Foosball table};
         \end{scope}
 %        draw a circle in the middle and an arrow pointing there labling it the camera
-        \draw[fill=blue!30] (3.5, 5) circle (0.5);
-        \draw[<-] (4.1, 5) -- (8, 5) node[above] {Camera};
+        \draw[fill=blue!30] (3.5, 5) circle (0.5) node[below, yshift=-0.5cm] {Camera below table};
+%        \draw[<-] (4.1, 5) -- (8, 5) node[above] {Camera};
 %            pc
         \draw[fill=orange!30] (10, 9) rectangle (12, 11) node[pos=0.5] {PC}
 %            cable from camera to pc
-        \draw[->] (3.5, 5.5) -- (3.5, 6) -- (11, 6) -- (11, 8.8);
+        \draw[->, blue] (3.5, 5.5) -- (3.5, 6) -- (11, 6) -- (11, 8.8);
 %            controler (Arduino)
         \draw[fill=orange!30] (6, 10) rectangle (9, 11) node[pos=.5]{Controller unit};
-        \draw[->] (10, 10.5) -- (9.2, 10.5);
+        \draw[->, blue] (10, 10.5) -- (9.2, 10.5);
 %            move motor
         \draw[fill=blue!30] (7, 6.5) rectangle (8.5, 8) node[pos=.5,
         text width=1.5cm,align=center
@@ -39,18 +39,19 @@ A simple diagramm of the final system can be seen here:
             \draw \gear{18}{2}{2.4}{10}{2}
         \end{scope}
         \draw[fill, black] (7.75, 7.25) circle (0.03);
-        \draw[<-](7.75, 8.2) -- (7.75, 10);
-        \draw (0, 8.75) rectangle (9, 8.25) node[pos=.5, shift={(1, 0)}] {Tube};
+        \draw[<-, blue](7.75, 8.2) -- (7.75, 10);
+%        tube
+        \draw[fill=black!20] (0, 8.75) rectangle (9, 8.25) node[pos=.5, shift={(1, 0)}] {Tube};
         \draw[fill=blue!30] (0, 9.25) rectangle (-1, 7.75) node[midway, left, shift={(-.5, 0)}] {Shoot motor};
-        \draw[->] (6, 10.5) -- (-0.5, 10.5) -- (-0.5, 9.45);
-        \draw (3.5, 8.5) circle (0.5);
+        \draw[->, blue] (6, 10.5) -- (-0.5, 10.5) -- (-0.5, 9.45);
+        \draw[fill=red] (3.5, 8.5) circle (0.5) node[below, yshift=-0.5cm] {Goalkeeper};
     \end{tikzpicture}
 \end{center}
 
 \section{Motors}\label{sec:motors}
 
 \subsection{Objectives}\label{subsec:objectives}
-The goalkeeper should be able to defend a ball with a velocity of maximum $v=7m/s$.
+The goalkeeper should be able to defend a ball with a velocity of maximum $v_{max}=7m/s$.
 
 \subsection{Table measurements}\label{subsec:table_measurements}
 This picture shows the table with the measurements:
@@ -80,16 +81,17 @@ The distance from the foremost attacker to the goal is $s=0.4m$.
 That means the player has to stop the ball in time $t_s$, where
 \begin{equation}
     \label{eq:stopping_time}
-    t_s = \frac{s}{v} = \frac{0.4m}{7m/s} = 0.057\dots s.
+    t_s = \frac{s}{v} = \frac{0.4m}{7m/s} \approx 0.057 s.
 \end{equation}
 Which is not a lot of time to process the image and move the motors.
-I round the travel distance of the goalkeeper of 180mm to 200mm for the calculations, because there is a spring at the end of the either ends which can be compressed.
-I always keep the goalkeeper in the middle, such that the player has to travel a maximum distance of 0.1m that means the player has an average velocity of
+I round the travel distance of the goalkeeper from $180mm$ to $200mm$ for the calculations because there is a spring at either end which can be compressed.
+I always keep the goalkeeper in the middle, such that the player has to travel a maximum distance of $0.1m$.
+That means the player has an average velocity of
 \begin{equation}
     \label{eq:average_velocity}
-    \bar{v} = \frac{s}{t_s} = \frac{0.1m}{0.057s} = 1.75m/s.
+    \bar{v} = \frac{s}{t_s} = \frac{0.1m}{0.057s} \approx 1.75m/s.
 \end{equation}
-I assume a linear acceleration and deceleration, and when the player reaches the top speed it needs to decelerate immediately, so the acceleration and deceleration and therefore the force is as small as possible.
+I assume a constant acceleration and deceleration, so when the player reaches the top speed it needs to decelerate immediately, to keep the forces as low as possible.
 A graph to explain the velocity can be seen here:
 
 \begin{center}
@@ -121,8 +123,8 @@ A graph to explain the velocity can be seen here:
     \end{tikzpicture}
 \end{center}
 
-\noindent Which means the player has a top speed of at least $v_{max}=2\cdot1.75m/s=3.5m/s$, as the motors have to accelerate and decelerate.
-The motor also needs to be able to accelerate the player in $0.057s/2=0.0285$, which means the motor needs to be able to achieve a maximum acceleration $a$ of
+\noindent Which means the player has a top speed of $v_{max}=2\cdot1.75m/s=3.5m/s$.
+The motor also needs to be able to accelerate the player in $0.057s/2=0.0285$, which means the motor needs to be able to achieve a maximum acceleration $a_{max}$ of
 \begin{equation}
     \label{eq:acceleration}
     a_{max} = \frac{v_{max}}{t_s} = \frac{3.5m/s}{0.0285s} = 122.8m/s^2.
@@ -138,7 +140,7 @@ assuming the radius $r_g$ of the gear is 8.3cm and the required top rotational s
     \label{eq:top_rpm}
     \frac{v}{2\pi r_g} \cdot 60s/min = \frac{7m/s}{2\pi \cdot 0.083m} \cdot 60s/min \approx 800\text{RPM}.
 \end{equation}
-A Motor that fits those requirements is the \textbf{PD42-3-1141\autocite{PD42-3-1141}} from \textbf{Trinamic}.
+A motor that fits those requirements is the \textbf{PD42-3-1141\autocite{PD42-3-1141}} from \textbf{Trinamic}.
 
 \subsection{Calculations for the shooting motor}\label{subsec:rotating_motor}
 The ball has a mass $m=17g$.
