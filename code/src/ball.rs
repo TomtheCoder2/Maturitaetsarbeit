@@ -20,6 +20,12 @@ macro_rules! debug {
     }
 }
 
+pub type SelectionFn = dyn Fn(u8, u8, u8) -> bool;
+
+pub fn standard_selection(r:u8, g:u8, b:u8) -> bool {
+    (r as i32 + g as i32 + b as i32) > 3 * 30
+}
+
 pub fn read_image(
     file_name: String,
     out_dir: String,
@@ -265,6 +271,8 @@ pub fn find_ball(
     height: u32,
     ball_comp: &mut BallComp,
     time: f32,
+    selection_fn: &dyn Fn(u8, u8, u8) -> bool,
+    min_radius: f32, max_radius: f32
 ) -> (i32, i32, f32) {
     const SCALING: u32 = 1;
     #[derive(Debug)]
@@ -296,7 +304,8 @@ pub fn find_ball(
             let x = i % width;
             let y = i / width;
             // keep the white pixels
-            if (r as i32 + g as i32 + b as i32) > 3 * 50 {
+            // if (r as i32 + g as i32 + b as i32) > 3 * 50 {
+            if selection_fn(r, g, b) {
                 // output.put_pixel(x, y, Rgba([r, g, b, a]));
                 // go through all balls, check if the pixel is close to any of them (within 2 pixels)
                 let mut found = false;
@@ -381,8 +390,8 @@ pub fn find_ball(
         let radius = (((ball.max_x - ball.min_x).pow(2) + (ball.max_y - ball.min_y).pow(2)) as f32)
             .sqrt()
             / 2.0;
-        // check that the radius is between 10 and 40
-        if radius < 10.0 || radius > 20.0 {
+        // check that the radius is between 10 and 20
+        if radius < min_radius || radius > max_radius {
             continue;
         }
         // check that the width and height are about equal to the radius
@@ -443,6 +452,9 @@ pub fn read_image_vis(
     output: &mut DynamicImage,
     ball_comp: &mut BallComp,
     time: f32,
+    selection_fn: &SelectionFn,
+    min_radius: f32,
+    max_radius: f32
 ) -> (i32, i32, f32) {
     // convert to u8 rgb vector
     let pixels = input.to_rgb8().into_raw();
@@ -451,7 +463,7 @@ pub fn read_image_vis(
         output.width() as usize * output.height() as usize * 3
     );
 
-    let ball = find_ball(&pixels, output.width(), output.height(), ball_comp, time);
+    let ball = find_ball(&pixels, output.width(), output.height(), ball_comp, time, selection_fn, min_radius, max_radius);
     // println!("ball: {:?}", ball);
     if ball.0 == -1 {
         return ball;

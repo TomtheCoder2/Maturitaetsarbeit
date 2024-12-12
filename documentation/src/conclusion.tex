@@ -1,0 +1,77 @@
+\section{What I learned}\label{sec:learned}
+
+\subsection{Hardware}\label{subsec:hardware}
+I learned a lot of things while building the parts for the table regarding Computer assisted Design (CAD) and the process to physically build the parts.
+
+\subsubsection{CAD}
+\todo{cite fusion}
+After extended research, I found the CAD program Fusion 360\autocite{fusion360} made by Autodesk, which I could use to the full extend with a free education license\autocite{autodesk-education}.
+Fusion 360 has a steep learning curve, meaning it took a lot of time at the beginning to design simple parts, but after having learned the basics by watching YouTube\autocite{youtube,fusion360-tutorial} tutorials, a lot of things made much more sense.
+Also, the people at the FabLab\autocite{fablab} were very helpful, showing me special features in Fusion 360\autocite{fusion360}.
+
+\subsubsection{Process}
+I made most of the parts at the FabLab and that would not have been possible without the help of the people there, which showed me for example printer settings for the 3D printers or the laser cutter.
+The CNC Milling course at the FabLab Zürich, where I learned the basics regarding CNC Milling, was also very helpful.
+
+\subsection{Software}\label{subsec:software}
+Regarding software I also learned a lot of new things, the main things being:
+
+\subsubsection{Embedded Programming}\label{subsubsec:embedded}
+Embedded programs are programms that run on computers without an operating system (OS), such as, for example, Windows\autocite{windows}, MacOS\autocite{macos} or Linux-based systems\autocite{linux}.\autocite{embedded-software}
+I wrote embedded code for the Arduino, first in Rust\autocite{rust}, using the avrdude library\autocite{avrdude}, and then with Arduino C++\autocite{arduino-c++}, which was also a fascinating experience, as many features are not supported by embedded systems.
+For example there are no files or folders, but also in Rust there are no floating point numbers, which means I had to write a custom library that supported fixed point numbers for my Proportional–integral–derivative controller (PID)\autocite{pid} controller for the DC motor
+Floating point numbers\autocite{floating-point} is the standard way to represent non-integers, fixed point numbers\autocite{fixed-point} do that too, but have often less accuracy, but are faster to work with, if the processor does not natively support floating point numbers.
+
+\subsubsection{Image processing and optics}
+By implementing the undistortion function (cf. subsection~\ref{subsec:opencv}), I learned a lot about optics and how to efficiently perform an algorithm by precomputing as much as possible.
+Also the ball detection (cf. subsection~\ref{sec:ball-detection}) provided some challenges, requiring thinking outside the box, for example the fact that it would recognize the tube as the ball, which I solved by implementing an algorithm that looks if the found shape is similar to a circle and has the correct radius.
+
+\subsubsection{CNN}
+Some time ago I implemented a Neural network (NN) from scratch in rust and once in java.
+However, they were not very fast, as they did not use the graphical processing unit (gpu), which would be able to compute many operations in parallel.
+Therefore, for this project, I used Tensorflow (TF), which was not always easy to use, but a lot faster than my own implementation.
+While using TF, I learned a lot of new things about NNs, especially the different types of layers than can be used, and how to prevent a model from overfitting, meaning it just learns the train dataset by heart, instead of learning the connection between the data and the target output.
+This is, for example, done by introducing dropout layers, which just deletes some of the internal data in the NN.
+While it seems very counterproductive to delete perhaps important data, in the end prevents the NN from learning everything by heart, because each time random elements/numbers are deleted, so each time the input is a little bit different.
+
+
+\section{What I would do differently next time}\label{sec:different}
+I had a lot of problems with the stepper motor, so it would have been better to look for a stepper motor that definitely works with the arduino and look for a simple tutorial on how to use the motor.
+Also writing the code for the stepper motor by myself was a more challenging task than expected, so it would have been better to use preexisting code, writing by people that have more knowledge than me.
+Currently, my cable management is a huge mess, so next time, I would first of all color-code the cables in a way that makes sense, and then use cable management tools to keep the cables in place.
+Furthermore, I would do more connections on a breadboard, as it is easier to change the connections, and then solder the connections, as it is more stable.
+
+
+\section{Future improvements}\label{sec:improvements}
+I suggest the following improvements:
+\begin{itemize}
+    \item A new way to control the stepper motor, the code written by me that accelerates and decelerates the motor is good enough for slow movements but for fast movements its not sophisticated enough.
+    Therefore, I would like to use code specifically made for this stepper motor, which the company has already provided with the motor with a custom PCB at the back.
+    Currently, I was not able to use that circuit board, because I was not aware of the fact that the arduino, with a additional breakout board, supports the RS458 communication standard.
+    \item I would like to extend the table by adding the missing players in the team, by manufacturing the same parts again three times.
+    A small problem is the fact that the defender travels more than half the width of the table, meaning I wont be able to connect the shoot motor in the same way as the player.
+    To solve this issue, I will build an extended holder offset to the side, providing the space for the longer tube.
+    \item Currently the camera captures the whole table with a framerate of $149$ fps, which is sufficient for slow balls, but the accuracy could be greatly improved by only capturing a small rectangle of the table, but at a higher framerate.
+    This frame will then be moved around, according to the last position and the current velocity of the ball.
+\end{itemize}
+
+
+\section{Acknowledgements}\label{sec:acknowledgements}
+I would like to express my heartfelt gratitude to the following individuals and organizations for their invaluable support and contributions to my project:
+\begin{itemize}
+    \item My parents, for their financial support and encouragement throughout this journey.
+    \item Ilena Teng, for her assistance in soldering the cables to the IR sensor.
+    \item FabLab, for providing access to laser cutting, 3D printing, and CNC machining, and for the helpful guidance of the team members.
+    \item Gabriel from ZHAW, for his expertise and support in the design process.
+    \item Mr. Pohle, for his insightful feedback, which greatly improved the quality of this documentation.
+\end{itemize}
+Thank you all for your generosity and dedication, which made this project possible.
+
+
+
+
+
+
+
+
+

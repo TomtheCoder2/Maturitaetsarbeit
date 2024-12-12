@@ -179,7 +179,7 @@ pub fn count_pos(&mut self, a_b: (bool, bool)) -> i32 {
 
 
 \section{Stepper Motor}\label{sec:stepper-motor}
-The PD42-3-1141 stepper motor doesn't have an encoder, so the program first sets the position to $0$ and then the motor can always drive $N$ steps relative to the current position and recompute the position of the stepper motor.
+The PD42-3-1141 stepper motor does not have an encoder, so the program first sets the position to $0$ and then the motor can always drive $N$ steps relative to the current position and recompute the position of the stepper motor.
 One problem that can occur is that the motor skips steps, especially when sending the step command with a low delay in between.
 To mitigate this problem, I let the motor accelerate, which is done by starting with a long delay and then lowering it.
 Deceleration is achieved by just making the delay longer again.
@@ -225,33 +225,31 @@ But stepper motors can also do smaller steps, called half, 1/4, 1/8 etc. steps.
 The smaller the steps, the higher the accuracy.
 I chose 1/4 steps because the smaller the steps, the slower the motor and 1/4 seemed a good compromise.
 But how can the arduino send the right commands to the motors?
-First I tried to use the PCB that came with the motor, but I couldn't get it to work.
-It just vibrated and didn't move.
-So switched to the same driver that I use for the DC motor, because it's actually a stepper motor driver that can also drive DC motors.
+First I tried to use the printed circuit board (PCB) that came with the motor, but I couldn't get it to work.
+It just vibrated and did not move.
+So switched to the same driver that I use for the DC motor, because it is actually a stepper motor driver that can also drive DC motors.
 That surprisingly worked, and I could control the motor.
-But I couldn't do micro steps as the LN298N driver doesn't support it.
+But I couldn't do micro steps as the LN298N driver does not support it.
 After speaking with some colleagues, they suggested looking at the whole construction as a CNC machine, I know that sounds a little bit strange, but a CNC machine is technically also just some motors controlled by one or more controllers.
 Therefore, I bought a CNC shield for the arduino, which is a shield that can control up to 4 stepper motors.
-The shields don't come with drivers, so I had to buy them separately.
-I didn't want to make the same mistake again, so I checked some reviews and found the DRV8825\autocite{drv8825} driver, which can do up to 1/32 steps and is also compatible with the CNC shield.
+The shields do not come with drivers, so I had to buy them separately.
+I did not want to make the same mistake again, so I checked some reviews and found the DRV8825\autocite{drv8825} driver, which can do up to 1/32 steps and is also compatible with the CNC shield.
 After some soldering and connecting the motors to the shield, I can now control the motors with the arduino.
 The next problem with the stepper motor is that it sometimes skips steps.
-Skipping one step though isn't a huge problem, but after some time the small errors add up and the motor is out of sync.
+Skipping one step though is not a huge problem, but after some time the small errors add up and the motor is out of sync.
 To mitigate this problem, I added an IR distance sensor to the motor, which measures the distance which the tube has traveled and then adjusts the position of the stepper motor.
 
 \subsection{IR Distance Sensor}\label{subsec:ir-distance-sensor}
-\todo{IR (infrared) sensor not yet testet}
-I use the ---- Infrared sensor, which, as the name suggests, uses Infrared red rays to measure the distance between the side of the table and the player.
+I use the GP2Y0E03\autocite{gp2y0e03} infrared sensor, which, as the name suggests, uses Infrared red rays to measure the distance between the side of the table and the player.
 This is done by emitting a short pulse with a photo diode and then measuring the time it took to reflect of the player and come back to the sensor, dividing the measured time by the speed of light and by two seconds, yields the distance.
 The sensor outputs this distance either as a digital signal with the I2C protocol or as voltage difference, also called analog output.
 As the digital output does not have a high resolution, the analog output is used, as it has a nearly 10x resolution.
 But higher resolution does not automatically mean higher accuracy and that was also confirmed by the data I collected.
-Luckily, the data seems to follow a binomial distribution, so by taking the average of $\approx100$ values, the programm gets a good estimate of the actual value.
-The integration of the mesaured data is realtively straight-forward, after moving to a specific position, the real distance is compared to the target distance and then the difference is corrected for.
-This process is repeated roughly $5-10$ times, which often results in a back and forth motion, but the positions get more accurate with each iteration.
+Luckily, the data seems to follow a binomial distribution, so by taking the average of $\approx100$ values, the program gets a good estimate of the actual value.
+The integration of the measured data is relatively straight-forward, after moving to a specific position, the real distance is compared to the target distance and then the difference is corrected for.
+This process is repeated roughly $5-10$ times, which often results in a back-and-forth motion, but the positions get more accurate with each iteration.
 
 \subsection{Arduino code}\label{subsec:arduino-code}
-\todo{Make shorter?}
 Why do I use c++ for the code running on the arduino?
 Usually I want to write all my code in rust, as it is a memory safe language and has a lot of other advantages, because it is quite new and has a lot of modern features.
 One feature is the ease of importing other libraries, which in rust are called crates, which is not as easy in c++.

@@ -1,3 +1,4 @@
+use matura::ball::{standard_selection, SelectionFn};
 use matura::compute_rl_coords::RLCompute;
 use std::f32::consts::PI;
 use std::sync::atomic::AtomicBool;
@@ -34,6 +35,13 @@ pub enum Command {
     FinishPlayerCalibration(Vec<i32>),
     Shoot,
     ResetDC,
+    SelectionFn{selection_type: Selection, r: u8, g: u8, b: u8, sum: i32},
+    Radius{min_radius: f32, max_radius: f32},
+}
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub enum Selection {
+    Separation,
+    Addition,
 }
 
 #[derive(Debug)]
@@ -42,7 +50,7 @@ pub enum Mode {
     PlayerCalibration,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct App {
     file_name: String,
@@ -88,7 +96,18 @@ pub struct App {
     final_player_calibration_positions: Vec<i32>,
     #[serde(skip)]
     player_calibration_message: String,
-    followball: bool
+    followball: bool,
+    selection: Selection,
+    r: u8,
+    g: u8,
+    b: u8,
+    last_rgb_sum: (u8,u8,u8,i32),
+    sum: i32,
+    #[serde(skip)]
+    selection_fn: Box<dyn Fn(u8, u8, u8) -> bool>,
+    show_selection: bool,
+    min_radius: f32,
+    max_radius: f32,
 }
 
 const POS: [i32; 7] = [50, 100, 150, 200, 250, 300, 350];
@@ -127,7 +146,17 @@ impl Default for App {
             player_calibration_pos: 0,
             final_player_calibration_positions: Vec::new(),
             player_calibration_message: "".to_string(),
-            followball: false
+            followball: false,
+            selection: Selection::Addition,
+            r: 30,
+            g: 30,
+            b: 30,
+            sum: 5 * 30,
+            last_rgb_sum: (30, 30, 30, 5 * 30),
+            selection_fn: Box::new(standard_selection),
+            show_selection: false,
+            min_radius: 10.,
+            max_radius: 20.,
         }
     }
 }
@@ -251,7 +280,7 @@ impl eframe::App for App {
             }
 
             let time = Instant::now().duration_since(self.start_time).as_secs_f32();
-            let ball = matura::ball::read_image_vis(&mut subtracted_image, &mut original_undistorted_image, &mut self.ball_comp, time);
+            let ball = matura::ball::read_image_vis(&mut subtracted_image, &mut original_undistorted_image, &mut self.ball_comp, time, &self.selection_fn, self.min_radius, self.max_radius);
             // println!("ball: {:?}", ball);
             // if !self.overlay_raw_img {
             if self.overlay_ball {
@@ -358,6 +387,49 @@ impl eframe::App for App {
                 }
             }
 
+            if self.show_selection {
+                match self.selection {
+                    Selection::Separation => {
+                        // go through each pixel and check if they have r, g, b > self.r, self.g, self.b
+                        // then calculate which color is the most over the threshold and color the pixel with that color
+                        for x in 0..image.width() {
+                            for y in 0..image.height() {
+                                let pixel = subtracted_image.get_pixel(x, y);
+                                let r = pixel[0];
+                                let g = pixel[1];
+                                let b = pixel[2];
+                                if (self.selection_fn)(r, g, b) {
+                                    let max = r.max(g).max(b);
+                                    let color = if max == r {
+                                        image::Rgba([255, 0, 0, 255])
+                                    } else if max == g {
+                                        image::Rgba([0, 255, 0, 255])
+                                    } else {
+                                        image::Rgba([0, 0, 255, 255])
+                                    };
+                                    image.put_pixel(x, y, color);
+                                }
+                            }
+                        }
+                    }
+                    Selection::Addition => {
+                        // go through each pixel and check if they have r, g, b > self.r, self.g, self.b
+                        // then calculate which color is the most over the threshold and color the pixel with that color
+                        for x in 0..image.width() {
+                            for y in 0..image.height() {
+                                let pixel = subtracted_image.get_pixel(x, y);
+                                let r = pixel[0];
+                                let g = pixel[1];
+                                let b = pixel[2];
+                                if (self.selection_fn)(r, g, b) {
+                                    image.put_pixel(x, y, image::Rgba([255, 0, 0, 255]));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             let ci_image = ColorImage::from_rgb(
                 [image.width() as usize, image.height() as usize],
                 image.as_bytes(),
@@ -441,8 +513,8 @@ impl eframe::App for App {
                     self.raw_image = load_raw();
                     self.sender.send(ReloadRaw);
                 }
-                ui.label("Speed:");
-                ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
+                // ui.label("Speed:");
+                // ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
                 if ui.button("Reset").clicked() {
                     // self.arduino_com.send_command(com::commands::Command::Reset(0));
                     // self.arduino_com.send_string("R");
@@ -464,6 +536,59 @@ impl eframe::App for App {
                     PAUSEPLAYER.store(self.pause_shooting, Ordering::Relaxed);
                 }
             });
+            ui.horizontal(|ui|{
+                ui.label("Min Radius:");
+                if ui.add(egui::DragValue::new(&mut self.min_radius).speed(0.1)).changed() {
+                    self.sender.send(Command::Radius{min_radius: self.min_radius, max_radius: self.max_radius}).unwrap();
+                }
+                ui.label("Max Radius:");
+                if ui.add(egui::DragValue::new(&mut self.max_radius).speed(0.1)).changed() {
+                    self.sender.send(Command::Radius{min_radius: self.min_radius, max_radius: self.max_radius}).unwrap();
+                }
+                // color stuff
+                egui::ComboBox::from_label("Selection")
+                    .selected_text(format!("{}", match self.selection {
+                        Selection::Separation => "Separation",
+                        Selection::Addition => "Addition",
+                    }))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.selection, Selection::Separation, "Separation");
+                        ui.selectable_value(&mut self.selection, Selection::Addition, "Addition");
+                    });
+                match self.selection {
+                    Selection::Separation => {
+                        // inputs for r g b
+                        ui.label("R:");
+                        ui.add(egui::DragValue::new(&mut self.r).speed(1));
+                        ui.label("G:");
+                        ui.add(egui::DragValue::new(&mut self.g).speed(1));
+                        ui.label("B:");
+                        ui.add(egui::DragValue::new(&mut self.b).speed(1));
+                        let r = self.r; // Clone current values of self.r, self.g, self.b
+                        let g = self.g;
+                        let b = self.b;
+
+                        // Create a closure with `'static` lifetime
+                        self.selection_fn = Box::new(move |r_in, g_in, b_in| {
+                            r_in > r && g_in > g && b_in > b
+                        });
+                    }
+                    Selection::Addition => {
+                        ui.label("Sum:");
+                        ui.add(egui::DragValue::new(&mut self.sum).speed(1));
+                        let sum = self.sum; // Clone current value of self.sum
+
+                        // Create a closure with `'static` lifetime
+                        self.selection_fn = Box::new(move |r_in, g_in, b_in| {
+                            r_in as i32 + g_in as i32 + b_in as i32 > sum
+                        });
+                    }
+                }
+                if self.last_rgb_sum != (self.r, self.g, self.b, self.sum) {
+                    self.last_rgb_sum = (self.r, self.g, self.b, self.sum);
+                    self.sender.send(Command::SelectionFn{selection_type:self.selection, r:self.r, g:self.g, b:self.b, sum:self.sum}).unwrap();
+                }
+            });
             ui.horizontal(|ui| {
                 ui.label("Exposure: ");
                 if ui
@@ -478,6 +603,7 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.calibration_mode, "Calibration Mode");
                 ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
                 ui.checkbox(&mut self.overlay_ball, "Overlay Ball");
+                ui.checkbox(&mut self.show_selection, "Show Selection");
                 ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
                 if ui.checkbox(&mut self.followball, "Follow Ball").clicked() {
                     FOLLOWBALL.store(self.followball, Ordering::Relaxed);
@@ -599,10 +725,7 @@ impl eframe::App for App {
                             egui::Image::new(&original_texture), // .max_width(200.0).rounding(10.0)
                         );
                     }
-
-
                     let response = ui.image(&undistorted_texture).interact(egui::Sense::click());
-
                     if response.clicked() {
                         if let Some(pos) = response.hover_pos() {
                             // Get the click position relative to the image
@@ -833,6 +956,9 @@ fn main() {
 
         let mut player_calibration_positions = vec![];
 
+        let mut selection_fn:Box<dyn Fn(u8, u8, u8) -> bool> = Box::new(standard_selection);
+        let mut min_radius @ mut max_radius = 0.;
+
         // functions
         const MIN_MOTOR: i32 = 0;
         const MAX_MOTOR: i32 = 400;
@@ -1013,8 +1139,30 @@ fn main() {
                         );
                         player_calibration_positions.clear();
                     }
-                    _ => {
-                        println!("Unknown command: {:?}", message);
+                    Command::SelectionFn{selection_type, r,g,b,sum} => {
+                        selection_fn = match selection_type {
+                            Selection::Separation => {
+                                // inputs for r g b
+                                let r = r; // Clone current values of self.r, self.g, self.b
+                                let g = g;
+                                let b = b;
+
+                                // Create a closure with `'static` lifetime
+                                Box::new(move |r_in, g_in, b_in| {
+                                    r_in > r && g_in > g && b_in > b
+                                })
+                            }
+                            Selection::Addition => {
+                                // Create a closure with `'static` lifetime
+                                Box::new(move |r_in, g_in, b_in| {
+                                    r_in as i32 + g_in as i32 + b_in as i32 > sum
+                                })
+                            }
+                        };
+                    }
+                    Radius{min_radius: min, max_radius: max} => {
+                        min_radius = min;
+                        max_radius = max;
                     }
                 }
             }
@@ -1090,6 +1238,9 @@ fn main() {
                         new_height as u32,
                         &mut ball_comp,
                         elapsed.as_secs_f32(),
+                        &selection_fn,
+                        min_radius,
+                        max_radius,
                     );
                     let elapsed_ball_comp = ball_comp_t0.elapsed();
                     if elapsed_ball_comp.as_secs_f32() * 1000.0 > 5. {
@@ -1172,7 +1323,7 @@ fn main() {
 
                     // shoot
                     if !shot && t0.elapsed().as_secs_f32() > shoot_time && !PAUSESHOOTING.load(Ordering::Relaxed)
-                    && !PAUSEPLAYER.load(Ordering::Relaxed) {
+                        && !PAUSEPLAYER.load(Ordering::Relaxed) {
                         arduino_com.send_string("S");
                         // println!("Shot!");
                         shot = true;

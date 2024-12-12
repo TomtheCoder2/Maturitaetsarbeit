@@ -37,26 +37,28 @@ fn load_texture_from_image(ctx: &Context, image: ColorImage) -> TextureHandle {
 impl eframe::App for App {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            // ui.label("Hello World!");
             ui.horizontal(|ui| {
-                ui.label("Number:");
-                ui.add(egui::Slider::new(&mut self.number, 0..=100));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Left margin:");
-                ui.add(egui::Slider::new(&mut self.left_margin, 0..=100));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Right margin:");
-                ui.add(egui::Slider::new(&mut self.right_margin, 0..=100));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Top margin:");
-                ui.add(egui::Slider::new(&mut self.top_margin, 0..=100));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Bottom margin:");
-                ui.add(egui::Slider::new(&mut self.bottom_margin, 0..=100));
+                // ui.label("Hello World!");
+                ui.horizontal(|ui| {
+                    ui.label("Number:");
+                    ui.add(egui::DragValue::new(&mut self.number));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Left margin:");
+                    ui.add(egui::DragValue::new(&mut self.left_margin));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Right margin:");
+                    ui.add(egui::DragValue::new(&mut self.right_margin));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Top margin:");
+                    ui.add(egui::DragValue::new(&mut self.top_margin));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Bottom margin:");
+                    ui.add(egui::DragValue::new(&mut self.bottom_margin));
+                });
             });
             let number = self.number;
             let img = match image::open(format!("input_images/input_image{}.png", number)) {
