@@ -17,14 +17,20 @@
 \usepackage{subcaption}
 \usepackage [autostyle, english = american]{csquotes}
 \usepackage{hyperref}
+\hypersetup{
+    colorlinks,
+    linkcolor={blue!50!black},
+    citecolor={blue!50!black},
+    urlcolor={blue!80!black}
+}
 \usepackage{pgfplots}
 \usepackage{babel}[english]
 %\usepackage[super]{natbib}
 \pgfplotsset{compat=1.12}
 %\usepackage{biblatex}
 \usepackage[backend=bibtex, urldate=long,
-%sorting=none
-, defernumbers,style=numeric,autocite=superscript]{biblatex}
+    sorting=none,
+    defernumbers,style=numeric,autocite=superscript]{biblatex}
 \addbibresource{sources.bib}
 \usepackage[fixlanguage]{babelbib}
 %\DefineBibliographyStrings[english]{%
@@ -37,6 +43,7 @@
 % rust formatting
 \usepackage{color}
 \usepackage{listings}
+\usepackage{calc}
 %\usepackage{biblatex}
 \definecolor{GrayCodeBlock}{RGB}{241,241,241}
 \definecolor{BlackText}{RGB}{110,107,94}
@@ -166,10 +173,6 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     }
 }
 
-\title{Matura Project\\ Foosball goalkeeper robot}
-\author{Jan Wilhelm}
-\date\today
-
 \newcommand{\mycancel}[2]{\overset{#1}{\cancel{#2}}}
 \renewcommand{\deg}[0]{\ensuremath{^\circ}}
 \newcommand{\abs}[1]{\left|#1\right|}
@@ -194,40 +197,81 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 \fancyhf{} % clear all fields
 \newcommand{\footl}{\Chaptername}
-
-\hypersetup{
-    colorlinks,
-    linkcolor={blue!50!black},
-    citecolor={blue!50!black},
-    urlcolor={blue!80!black}
-}
+\newcommand{\bottompage}{-- \thepage\ --}
 
 \fancypagestyle{plain}{%
     \fancyhf{}
     \fancyhead[L]{\rule[-2ex]{0pt}{2ex}\small Matura Project}
     \fancyhead[R]{\small Jan Wilhelm 6e}
     \fancyfoot[L]{\small \footl}
-    \fancyfoot[C]{-- \thepage\ --}
+    \fancyfoot[C]{\bottompage}
     \fancyfoot[R]{\small \date{\today}}
     \renewcommand{\headrulewidth}{0.2pt}
     \renewcommand{\footrulewidth}{0.2pt}}
 \pagestyle{plain}
 
 
+\title{
+    \linespread{1.8}
+    Jan Wilhelm, 6e\\
+    \Huge \textbf{Foosball goalkeeper robot}\\
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.5\linewidth]{../photos/title}
+        \caption{}
+        \label{fig:title}
+    \end{figure}
+\Large
+    \textbf{Maturitätsarbeit 2024}\\
+    Kantonsschule Hohe Promenade, Zürich\\
+    \textbf{Supervisor:} Clemens Pohle\\
+    \textbf{Advisor:} Dr. Hugo Leonel Cabrera Cifuentes\\
+    \linespread{1}}
+\date\today
+
 %\linespread{1.8}
 
 
 % Document
 \begin{document}
+
+    \makeatletter
+    \voffset=-1cm
+    \begin{titlepage}
+        \thispagestyle{fancy}
+        \renewcommand{\headrulewidth}{0pt}
+        \renewcommand{\footrulewidth}{0pt}
+        \lhead{\includegraphics[scale=0.5]{../photos/hopro_logo}}
+        \rhead{}
+        \cfoot{} % this is to remove the page number
+        \hbox{}\vfill
+        \begin{center}
+        {\LARGE\@title}
+            \\[3em]
+            {\large\@author}\\[1.75em]
+            {\large\@date}
+        \end{center}
+        \vspace{3cm}\vfill
+    \end{titlepage}
+    \makeatother
+    \voffset=-1.7cm
+
     % todo: main questions: We/I or unpersonal?
     % -> I always use I
-    \maketitle
+%    \maketitle
+%    \mewpage
 
+    \shipout\null
+
+
+    \renewcommand{\bottompage}{}
     \tableofcontents
-    \newpage
+%    \newpage
 
 
     \chapter{Introduction}\label{ch:introduction}
+    \renewcommand{\bottompage}{-- \thepage\ --}
+    \setcounter{page}{1}
     \input{introduction}
 
 
@@ -250,6 +294,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \chapter{Software}\label{ch:software}
     \input{software}
 
+
     \chapter{Results}\label{ch:results}
     \todo{Finish project to get lates results}
 
@@ -259,7 +304,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 %    \chapter{References}\label{ch:references}
 
-    \bibliographystyle{unsrt}
+    \bibliographystyle{plain}
     \printbibliography
 %    \newpage
 %    \bibliographystyle{unsrt}
@@ -277,4 +322,5 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 \end{document}
 
-% pdflatex -interaction=nonstopmode -output-directory=output src/main.tex 
+% pdflatex -interaction=nonstopmode -output-directory=output src/main.tex
+

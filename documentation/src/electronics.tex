@@ -240,7 +240,7 @@ Skipping one step though is not a huge problem, but after some time the small er
 To mitigate this problem, I added an IR distance sensor to the motor, which measures the distance which the tube has traveled and then adjusts the position of the stepper motor.
 
 \subsection{IR Distance Sensor}\label{subsec:ir-distance-sensor}
-I use the GP2Y0E03\autocite{gp2y0e03} infrared sensor, which, as the name suggests, uses Infrared red rays to measure the distance between the side of the table and the player.
+I use the GP2Y0E03\autocite{ir-sensor} infrared sensor, which, as the name suggests, uses Infrared red rays to measure the distance between the side of the table and the player.
 This is done by emitting a short pulse with a photo diode and then measuring the time it took to reflect of the player and come back to the sensor, dividing the measured time by the speed of light and by two seconds, yields the distance.
 The sensor outputs this distance either as a digital signal with the I2C protocol or as voltage difference, also called analog output.
 As the digital output does not have a high resolution, the analog output is used, as it has a nearly 10x resolution.

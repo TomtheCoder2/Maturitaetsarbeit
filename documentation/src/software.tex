@@ -13,15 +13,14 @@ A flowchart of the general process can be seen here:
 %                                        |-live feed to gui for debugging
 %
 
-\todo{swithc location and timing}
 \begin{center}
     \begin{tikzpicture}[node distance=2cm]
         \node (in1) [io] {Camera};
         \node (pro1) [process, below of=in1] {Undistortion};
         \node (pro2) [process, below of=pro1] {Ball detection};
         \node (pro3) [process, below of=pro2] {Prediction};
-        \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {Timing?};
-        \node (pro5) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {Location?};
+        \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {Location?};
+        \node (pro5) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {Timing?};
         \node (out1) [io, below of=pro5, right of=pro5, xshift=1.5cm] {Arduino};
 
         % arrows
@@ -55,7 +54,7 @@ As one can see there is severe distortion in the image, this can be corrected by
 
 % todo: should i explain in detail how opencv does it?
 % lets do it and later i can delete it if its too much
-\todo{Either add lables for the variables or remove this part}
+%\todo{Either add lables for the variables or remove this part}
 
 \subsection{OpenCV}\label{subsec:opencv}
 OpenCV is a library that provides many functions for image processing, one of these functions is the camera calibration function.
@@ -143,7 +142,7 @@ So I wrote a custom function that generates a table where the index for each pix
 The rust function to get the coordinates $x_{\text{original}},y_{\text{original}}$ of a pixel at $x_{\text{undistorted}},y_{\text{undistorted}}$ in the distorted (original) image looks like this:
 
 
-\todo{Should i move these code snippets into the appendix?}
+%\todo{Should i move these code snippets into the appendix?}
 \begin{lstlisting}[language=rust,breaklines,label={lst:distort_coords}]
 /// Calculate the distorted coordinates given undistorted image coordinates.
 fn distort_coords(x: f64, y: f64, fx: f64, fy: f64, cx: f64, cy: f64) -> (f64, f64) {
@@ -315,7 +314,7 @@ The GUI can be seen here:
     \label{fig:margin_adj_gui}
 \end{figure}
 The GUI is also written in rust using the egui\autocite{egui} library.
-\todo{Fix the egui cite command (numbers instead of name)}
+%\todo{Fix the egui cite command (numbers instead of name)}
 The cropped example image looks like this:
 \begin{figure}[H]
     \centering
@@ -324,7 +323,7 @@ The cropped example image looks like this:
     \label{fig:example8_cropped}
 \end{figure}
 
-\todo{Move parts of this chapter into appendix}
+%\todo{Move parts of this chapter into appendix}
 \subsection{Real World Coordinates}\label{subsec:real-world-coordinates}
 An important part of the software is to convert the pixel coordinates to real-world coordinates.
 This is done by adding fiducials (markers that are known to be at a specific position) to the table.
@@ -424,11 +423,11 @@ Grad-Cam is an algorithm to create a saliency map for the CNN, this can be seen 
     \label{fig:gradcam_combined_image}
 \end{figure}\\
 There is always first the name of the layer as a title then the heat map alone on the left and on the right there is an overlay of the original image and the heat map.
-And indeed we see that....
-\todo{short description where the CNN is looking at, why it is cool}
+And indeed, we see that in the last few layers, the CNN focuses on the fiducial and the corners of the table, which is quite fascinating to see, as it mimics human behavior.
+%\todo{short description where the CNN is looking at, why it is cool}
 
 % Todo add stats about the real world training/tests
-\todo{Todo add stats about the real world training/tests}
+%\todo{Todo add stats about the real world training/tests}
 
 
 \section{Ball Detection}\label{sec:ball-detection}
@@ -503,7 +502,6 @@ If the difference between the prediction and the real world position is too larg
     \caption[ball-prediction]{Prediction of the future positions of the ball. The green balls are the last positions and the violet line is the current velocity}
     \label{fig:ball_prediction}
 \end{figure}
-
 % todo: should i explain the linear regression model and the linear algebra behind it?
 %\todo{Should i explain the linear regression model and the linear algebra behind it?}
 To find out where the ball will end up when it reaches the goalkeeper (or any player), I can just compute the intersection between the line of the ball and the line of the goalkeeper.
@@ -525,6 +523,12 @@ The line of the ball can be computed with the current position $\vec{r}$, the cu
     \end{split}\label{eq:ball_intersection}
 \end{equation}
 Now I only have to convert the $\vec{r}_\text{intersection}$ to real world coordinates and I get the position where the ball will end up, which the program sends to the arduino to move the goalkeeper to this position.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{../photos/ball_prediction2}
+    \caption[ball-detection]{Prediction of the ball movement. The yellow circle shows where the ball will intersect with the player}
+    \label{fig:ball-prediction}
+\end{figure}
 
 %
 %\todo{Can be removed, and link to electronics chapter, correct?}
