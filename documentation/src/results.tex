@@ -1,0 +1,30 @@
+Describing the results is not an easy task, as the project is still in development and the final results are not yet available.
+However, some general results can be presented, such as the construction of the models, the embedded programming, and the image processing and optics.
+
+\subsection{Embedded Programming}\label{subsec:results_embedded}
+The code on the Arduino is not as sophisticated as desired.
+While it performs the tasks well enough at low speeds, at higher speeds the motor becomes inconsistent and inaccurate.
+This issue can be resolved with the custom PCB provided by the company, which uses the RS485 communication standard.
+Therefore, this improvement is listed as a future enhancement in Section~\ref{sec:improvements}.
+
+\subsubsection{Precision}\label{subsubsec:precision}
+The precision has not yet reached $1\,\mathrm{mm}$.
+Measuring it precisely is challenging because the closer the player is, the more precise the IR sensor needs to be.
+Additionally, the IR sensor occasionally fails to measure the distance correctly, leading to improper movement of the player.
+
+\subsection{Image Processing and Optics}\label{subsec:results_image}
+The undistortion function works very well, largely due to over 20 iterations of the calibration process.
+Ball detection is also highly accurate, successfully detecting only the ball while avoiding the tube or the player.
+However, under certain lighting conditions, the player’s hand is occasionally detected as the ball.
+This issue could be resolved by using a differently colored ball.
+
+The ball prediction is accurate, with a small margin of error.
+However, timing inconsistencies remain, where the player sometimes shoots too early or too late.
+This issue is attributed to camera latency and USB driver delays.
+Additionally, the inexpensive physical DC motor driver used is outdated, unable to ramp up speed quickly enough, and prone to overheating.
+
+\subsection{General}\label{subsec:general}
+Overall, this project successfully demonstrates a working proof of concept for a foosball robot.
+Its main advantage over similar projects lies in the simplicity of its design, which eliminates the need for motor movement.
+This simplicity allows for easy expansion to heavier, faster, and stronger motors.
+

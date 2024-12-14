@@ -10,6 +10,7 @@ More specifically, the machine should be able to:
     \item Achieve a positional precision of $1mm$, which is circa the accuracy of normal stepper motors (including the mechanics to move the players).
 \end{itemize}
 
+
 \section{The foosball robot system}\label{sec:system}
 A simple diagramm of the final system can be seen here:
 % create a simple drawing of the system
@@ -47,6 +48,7 @@ A simple diagramm of the final system can be seen here:
         \draw[fill=red] (3.5, 8.5) circle (0.5) node[below, yshift=-0.5cm] {Goalkeeper};
     \end{tikzpicture}
 \end{center}
+
 
 \section{Motors}\label{sec:motors}
 
@@ -143,7 +145,7 @@ assuming the radius $r_g$ of the gear is 8.3cm and the required top rotational s
 A motor that fits those requirements is the \textbf{PD42-3-1141\autocite{PD42-3-1141}} from \textbf{Trinamic}.
 
 \subsection{Calculations for the shooting motor}\label{subsec:rotating_motor}
-The ball has a mass $m=17g$.
+The ball has a mass $m_{ball}=17g$.
 I assume that I have an angle of $45\deg$ ($=\frac{\pi}{4}$ in radians) to accelerate the ball.
 \\
 \begin{center}
@@ -173,25 +175,127 @@ I assume that I have an angle of $45\deg$ ($=\frac{\pi}{4}$ in radians) to accel
 %    \\
 That means the player has the distance $l$ (arc length) to accelerate the ball together with the player.
 \begin{equation}
-    \label{eq:distance}
+    \label{eq:arc-length}
     l = r_p \cdot \frac{\pi}{4} = 70mm \cdot \frac{\pi}{4} = 55mm
 \end{equation}
 The goal is to shoot the ball back at a speed of $7m/s$.
-The time to make one full rotation with the given speed of $7m/s$ is
+The time to make one full rotation with the given speed of $v_{max}=7m/s$ is
 \begin{equation}
-    \label{eq:time}
-    t_{rot} = \frac{2\pi\cdot r_p}{v} = \frac{2\pi\cdot 70mm}{7m/s} = \frac{\pi}{50} \approx 0.06s
+    \label{eq:time-rot}
+    t_{rot} = \frac{2\pi\cdot r_p}{v_{max}} = \frac{2\pi\cdot 70mm}{7m/s} = \frac{\pi}{50} \approx 0.06s
 \end{equation}
 The maximum speed can easily be calculated with
 \begin{equation}
     \label{eq:max_speed}
     \omega = \frac{60s/min}{t_{rot}} = \frac{60s/min}{0.6s/rotation} = 1000\text{RPM}
 \end{equation}
-\todo{Compute the torque needed to accelerate the ball}
-For the motor that just rotates the figure I can use a DC motor with gears and an encoder, as they often have more power and can go faster with less torque and accuracy.
+%\todo{Compute the torque needed to accelerate the ball}
+To calculate the torque needed to accelerate the ball, I need to know the time it takes to accelerate the ball to full speed.
+This can be done by integrating the acceleration twice over time and solving for the time.
+\begin{equation}
+    \label{eq:time_to_full_speed}
+    v = \int a \cdot dt = a \cdot t \Rightarrow t=\frac{v}{a}
+\end{equation}
+The acceleration can be calculated by using the double integral of the acceleration over time.
+\begin{equation}
+    \label{eq:shoot_acceleration}
+    l = \int v \cdot dt = \int a \cdot t \cdot dt = \frac{1}{2} \cdot a \cdot t^2 \Rightarrow a = \frac{2 \cdot l}{t^2}
+\end{equation}
+Substituting the time from the equation~\ref{eq:time_to_full_speed} into the equation~\ref{eq:shoot_acceleration} gives the acceleration.
+\begin{equation}
+    \label{eq:shoot_acceleration_substituted}
+    a = \frac{2 \cdot l}{(\frac{v_{max}}{a})^2} = \frac{2 \cdot l \cdot a^2}{v_{max}^2} \Rightarrow a = \frac{v_{max}^2}{2 \cdot l}
+\end{equation}
+Together with the mass $m_{ball}$ of the ball, the torque needed to accelerate the ball can be calculated.
+
+\begin{equation}
+    \label{eq:torque_shoot}
+    |\vec{\tau}| = |\vec{r} \times \vec{F}| \xRightarrow{\vec{r} \perp \vec{F}} \tau = F \cdot r_p = m_{ball} \cdot a \cdot r_p = m_{ball} \cdot \frac{v_{max}^2}{2 \cdot l} \cdot r_p
+\end{equation}
+Together with the length $l$ from equation~\ref{eq:arc-length} and the speed $v$ from equation\ref{eq:time-rot}, the torque needed to accelerate the ball can be calculated.
+\begin{equation}
+    \label{eq:torque_shoot_substituted}
+    \tau = r_p \cdot m_{ball} \cdot \frac{v_{max}^2}{\cancel{2}\cdot\frac{\pi}{\cancelunder{2}{4}}\cdot r_p} = 2m_{ball} \cdot \frac{v_{max}^2}{\pi} \approx 0.5Nm
+\end{equation}
+
+
+
+For the motor that just rotates the player I can use a DC motor with gears and an encoder, as they often have more power and can go faster with less torque and accuracy.
 % Pololu 10:1 Metal Gearmotor 37Dx65L mm 12V with 64 CPR Encoder (Helical Pinion) 4758
 A motor that fits these requirements is the \textbf{Pololu 10:1 Metal Gearmotor 37Dx65L mm 12V with 64 CPR Encoder (Helical Pinion) 4758}\autocite{pololu-dc}.
-
+Later I realized a made a mistake by not including the moment of inertia of the player.
+Including the moment of inertia the equation is a little bit different:
+The torque is defined as
+\begin{equation}
+    \label{eq:torque2}
+    \tau = I \frac{d\vec{\omega}}{dt}
+\end{equation},
+where $I$ is the moment of inertia and $\omega$ is the angular velocity.
+The angular velocity $\omega$ depends linearly on time $t$:
+\begin{equation}
+    \label{eq:angular_velocity}
+    \omega = a_\omega \cdot t
+\end{equation}
+where $a_\omega$ is the angular acceleration.
+Integrating this formula gives a formula for the angle $\theta$:
+\begin{equation}
+    \label{eq:angle}
+    \theta(t) = \int \vec{\omega}(t)dt = \int a_\omega \cdot t dt = \frac{1}{2} a_\omega t^2
+\end{equation}
+I know that at time $t_e$ the player has rotated by $45\deg = \frac{\pi}{4}$.
+Substituting $t_e$ into the equation~\ref{eq:angle} and solve for $t_e$:
+\begin{equation}
+    \label{eq:time_to_rotate}
+    \frac{1}{2} a_\omega t_e^2 = \frac{\pi}{4} \Rightarrow t_e = \sqrt{\frac{\pi}{2a_\omega}}
+\end{equation}
+Substituting $t_e$ into the equation~\ref{eq:angular_velocity} gives an equation for the angular acceleration, which can be solved for the angular accleration $a_\omega$:
+\begin{equation}
+    \label{eq:angular_acceleration}
+    \omega(t_e) = \frac{2\pi}{t_{rot}} \Rightarrow a_{\omega} \cdot \sqrt {\frac{\pi}{2a_{\omega}}} = \frac{2\pi}{t_{rot}} \Rightarrow a_{\omega} = \frac{8\pi}{t_{rot}^2}
+\end{equation}
+Therefore the function $\omega(t)$ is:
+\begin{equation}
+    \label{eq:angular_velocity_function}
+    \omega(t) = \frac{8\pi}{t_{rot}^2} \cdot t
+\end{equation}
+And the required torque $\tau$ is:
+\begin{equation}
+    \label{eq:torque3}
+    \tau = I \frac{d\vec{\omega}}{dt} = I \frac{8\pi}{t_{rot}^2}
+\end{equation}
+I approximate the player with a tube and the axis going through it at the distance $s=\frac{l}{6}$ from the center axis.
+The moment of inertia of a tube is:
+\begin{equation}
+    \label{eq:moment_of_inertia}
+    I = \frac{1}{12} m_{player} \cdot l^2
+\end{equation}
+To shift the axis of rotation, the Parallel axis theorem can be used:
+\begin{equation}
+    \label{eq:parallel_axis_theorem}
+    I_0 = I_{S} + m_{player} \cdot s^2
+\end{equation}
+where $I_0$ is the moment of inertia around the shifted axis, $I_{S}$ is the moment of inertia around the center axis and $s$ is the distance from the center axis to the shifted axis.
+Therefore, the moment of inertia $I_0$ is:
+\begin{equation}
+    \label{eq:moment_of_inertia_shifted}
+    I_0 = \frac{1}{12} m_{player} \cdot l^2 + m_{player} \cdot s^2 = \frac{1}{12} m_{player} \cdot l^2 + m_{player} \cdot \left(\frac{l}{6}\right)^2 = \frac{1}{12} m_{player} \cdot l^2 + \frac{1}{36} m_{player} \cdot l^2 = \frac{1}{9} m_{player} \cdot l^2
+\end{equation}
+Substituting the moment of inertia $I_0$, $l=\frac{3}{2}r_p$ and $m_{player}=50g$ into the equation~\ref{eq:torque3} gives the torque needed to accelerate the player:
+\begin{equation}
+    \label{eq:torque4}
+    \begin{split}
+        \tau &= \frac{8\pi}{t_{rot}^2} \cdot \frac{1}{9} m_{player} \cdot l^2 = \frac{8\pi}{t_{rot}^2} \cdot \frac{1}{9} m_{player} \cdot \left(\frac{3}{2}r_p\right)^2\\
+        &= \frac{\mycancel{2}{8}}{\cancel{9}}m_{player}\pi\frac{\frac{\cancel{9}}{\cancel{4}}r_p^2}{t_{rot}^2}=2m_{player}\pi\frac{r_p^2}{t_{rot}^2}
+    \end{split}
+\end{equation}
+Substituting $t_{rot}$ from equation\ref{eq:time-rot} yields:
+\begin{equation}
+    \label{eq:torque5}
+    \tau = \cancel{2}m_{player}\cancel{\pi}\frac{\cancel{r_p^2}\cdot v_{max}^2}{2^{\cancel{2}} \cdot \pi^{\cancel{2}} \cdot \cancel{r_p^2}} = m_{player}\frac{v_{max}^2}{\pi} \approx 0.39Nm
+\end{equation}
+Adding this to the torque needed to accelerate the ball gives a total torque of $\tau_{total} \approx 0.89Nm$.
+So the motor, having a maximum torque $\sim0.5Nm$, is actually not capable of accelerating the player and the ball at the same time, therefore the $v_{max}$ of $7m/s$ can not be reached.
+The calculations to determine the actual $v_{max}$ is left as an exercise to the reader.
 
 \section{Camera}\label{sec:camera}
 
@@ -256,3 +360,4 @@ Now I solve for the focal length $f$:
 \end{equation}
 % Arducam 2.8-12mm Varifocal C-Mount Lens for Raspberry Pi HQ Camera, with C-CS Adapter
 A lens that satisfies these requirements is the \textbf{Arducam 2.8-12mm Varifocal C-Mount Lens for Raspberry Pi HQ Camera, with C-CS Adapter} with a focal length of $2.8-12mm$.
+An image showing the table with the glass plate can be found in the appendix~\ref{}

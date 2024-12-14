@@ -1,6 +1,6 @@
 % Preamble
 \documentclass[11pt,openany]{book}
-\usepackage[a4paper, total={6in, 8in},headsep=1cm]{geometry}
+\usepackage[a4paper, total={6in, 8in},headsep=0.5cm]{geometry}
 
 % Packages
 \usepackage{amsmath}
@@ -10,6 +10,7 @@
 \usetikzlibrary{calc}
 \usepackage{fancyheadings}
 \usetikzlibrary{decorations.markings}
+\usepackage{mathtools}
 \usetikzlibrary{decorations.pathmorphing,patterns}
 \usepackage{transparent}
 \usepackage{graphicx}
@@ -25,6 +26,7 @@
 }
 \usepackage{pgfplots}
 \usepackage{babel}[english]
+\usepackage{cancel}
 %\usepackage[super]{natbib}
 \pgfplotsset{compat=1.12}
 %\usepackage{biblatex}
@@ -174,6 +176,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 }
 
 \newcommand{\mycancel}[2]{\overset{#1}{\cancel{#2}}}
+\newcommand{\cancelunder}[2]{\underset{#1}{\cancel{#2}}}
 \renewcommand{\deg}[0]{\ensuremath{^\circ}}
 \newcommand{\abs}[1]{\left|#1\right|}
 \newcommand{\cfbox}[2]{%
@@ -205,7 +208,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \fancyhead[R]{\small Jan Wilhelm 6e}
     \fancyfoot[L]{\small \footl}
     \fancyfoot[C]{\bottompage}
-    \fancyfoot[R]{\small \date{\today}}
+    \fancyfoot[R]{\small \today}
     \renewcommand{\headrulewidth}{0.2pt}
     \renewcommand{\footrulewidth}{0.2pt}}
 \pagestyle{plain}
@@ -214,16 +217,18 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 \title{
     \linespread{1.8}
     Jan Wilhelm, 6e\\
-    \Huge \textbf{Foosball goalkeeper robot}\\
+    \linespread{1}
+    \Huge \textbf{Designing, assembling and programming a foosball goalkeeper robot}\\
+    \linespread{1.8}
     \begin{figure}[H]
         \centering
-        \includegraphics[width=0.5\linewidth]{../photos/title}
-        \caption{}
+        \includegraphics[width=0.55\linewidth]{../photos/title}
+        \caption*{}
         \label{fig:title}
     \end{figure}
 \Large
-    \textbf{Maturitätsarbeit 2024}\\
-    Kantonsschule Hohe Promenade, Zürich\\
+    \textbf{Maturitätsarbeit}\\
+    Kantonsschule Hohe Promenade, Gymnasium, Zürich/2024\\
     \textbf{Supervisor:} Clemens Pohle\\
     \textbf{Advisor:} Dr. Hugo Leonel Cabrera Cifuentes\\
     \linespread{1}}
@@ -254,7 +259,8 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
         \vspace{3cm}\vfill
     \end{titlepage}
     \makeatother
-    \voffset=-1.7cm
+    \voffset=-2.0cm
+    \textheight=26.4cm
 
     % todo: main questions: We/I or unpersonal?
     % -> I always use I
@@ -296,7 +302,8 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 
     \chapter{Results}\label{ch:results}
-    \todo{Finish project to get lates results}
+%    \todo{Finish project to get latest results}
+    \input{results}
 
 
     \chapter{Conclusion}\label{ch:conclusion}

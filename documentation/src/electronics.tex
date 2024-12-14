@@ -160,7 +160,7 @@ A graph of the outputs can be seen here:
         \label{fig:encoder}
     \end{figure}
 \end{center}
-\todo{Which code snippets should be in the appendix and which ones a interesting to look at?}
+%\todo{Which code snippets should be in the appendix and which ones a interesting to look at?}
 An implementation in rust of a function that counts the passes can be seen here:
 \begin{lstlisting}[language=rust,breaklines,label={lst:dc-motor}]
 pub fn count_pos(&mut self, a_b: (bool, bool)) -> i32 {
@@ -219,7 +219,7 @@ void loop {
 \end{lstlisting}
 Its important that the code first rounds the input to the next integer which is divisible by the step-resolution, in this case 4, because the motor can only stop at full steps.\\
 \vspace{0.5cm}\\
-\todo{This part describes my personal experincies, should I make it more objectiv and dont mention the failures or leave it liek it is currently?}
+%\todo{This part describes my personal experincies, should I make it more objectiv and dont mention the failures or leave it liek it is currently?}
 The PD42-3-1141 stepper motor has 200 steps per rotation, that means the controller sends 200 step-commands until one full rotation is achieved.
 But stepper motors can also do smaller steps, called half, 1/4, 1/8 etc. steps.
 The smaller the steps, the higher the accuracy.
@@ -231,14 +231,19 @@ So switched to the same driver that I use for the DC motor, because it is actual
 That surprisingly worked, and I could control the motor.
 But I couldn't do micro steps as the LN298N driver does not support it.
 After speaking with some colleagues, they suggested looking at the whole construction as a CNC machine, I know that sounds a little bit strange, but a CNC machine is technically also just some motors controlled by one or more controllers.
-Therefore, I bought a CNC shield for the arduino, which is a shield that can control up to 4 stepper motors.
+Therefore, I bought a CNC shield\autocite{cnc-shield} for the arduino, which is a shield that can control up to 4 stepper motors.
 The shields do not come with drivers, so I had to buy them separately.
 I did not want to make the same mistake again, so I checked some reviews and found the DRV8825\autocite{drv8825} driver, which can do up to 1/32 steps and is also compatible with the CNC shield.
 After some soldering and connecting the motors to the shield, I can now control the motors with the arduino.
 The next problem with the stepper motor is that it sometimes skips steps.
 Skipping one step though is not a huge problem, but after some time the small errors add up and the motor is out of sync.
 To mitigate this problem, I added an IR distance sensor to the motor, which measures the distance which the tube has traveled and then adjusts the position of the stepper motor.
-
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=.3\linewidth]{../photos/cnc_shield}
+    \caption{CNC Shield}
+    \label{fig:cnc_shield}
+\end{figure}
 \subsection{IR Distance Sensor}\label{subsec:ir-distance-sensor}
 I use the GP2Y0E03\autocite{ir-sensor} infrared sensor, which, as the name suggests, uses Infrared red rays to measure the distance between the side of the table and the player.
 This is done by emitting a short pulse with a photo diode and then measuring the time it took to reflect of the player and come back to the sensor, dividing the measured time by the speed of light and by two seconds, yields the distance.

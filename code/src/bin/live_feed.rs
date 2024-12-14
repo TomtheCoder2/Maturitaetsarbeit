@@ -35,8 +35,8 @@ pub enum Command {
     FinishPlayerCalibration(Vec<i32>),
     Shoot,
     ResetDC,
-    SelectionFn{selection_type: Selection, r: u8, g: u8, b: u8, sum: i32},
-    Radius{min_radius: f32, max_radius: f32},
+    SelectionFn { selection_type: Selection, r: u8, g: u8, b: u8, sum: i32 },
+    Radius { min_radius: f32, max_radius: f32 },
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum Selection {
@@ -101,7 +101,7 @@ pub struct App {
     r: u8,
     g: u8,
     b: u8,
-    last_rgb_sum: (u8,u8,u8,i32),
+    last_rgb_sum: (u8, u8, u8, i32),
     sum: i32,
     #[serde(skip)]
     selection_fn: Box<dyn Fn(u8, u8, u8) -> bool>,
@@ -536,14 +536,14 @@ impl eframe::App for App {
                     PAUSEPLAYER.store(self.pause_shooting, Ordering::Relaxed);
                 }
             });
-            ui.horizontal(|ui|{
+            ui.horizontal(|ui| {
                 ui.label("Min Radius:");
                 if ui.add(egui::DragValue::new(&mut self.min_radius).speed(0.1)).changed() {
-                    self.sender.send(Command::Radius{min_radius: self.min_radius, max_radius: self.max_radius}).unwrap();
+                    self.sender.send(Command::Radius { min_radius: self.min_radius, max_radius: self.max_radius }).unwrap();
                 }
                 ui.label("Max Radius:");
                 if ui.add(egui::DragValue::new(&mut self.max_radius).speed(0.1)).changed() {
-                    self.sender.send(Command::Radius{min_radius: self.min_radius, max_radius: self.max_radius}).unwrap();
+                    self.sender.send(Command::Radius { min_radius: self.min_radius, max_radius: self.max_radius }).unwrap();
                 }
                 // color stuff
                 egui::ComboBox::from_label("Selection")
@@ -586,7 +586,7 @@ impl eframe::App for App {
                 }
                 if self.last_rgb_sum != (self.r, self.g, self.b, self.sum) {
                     self.last_rgb_sum = (self.r, self.g, self.b, self.sum);
-                    self.sender.send(Command::SelectionFn{selection_type:self.selection, r:self.r, g:self.g, b:self.b, sum:self.sum}).unwrap();
+                    self.sender.send(Command::SelectionFn { selection_type: self.selection, r: self.r, g: self.g, b: self.b, sum: self.sum }).unwrap();
                 }
             });
             ui.horizontal(|ui| {
@@ -956,7 +956,7 @@ fn main() {
 
         let mut player_calibration_positions = vec![];
 
-        let mut selection_fn:Box<dyn Fn(u8, u8, u8) -> bool> = Box::new(standard_selection);
+        let mut selection_fn: Box<dyn Fn(u8, u8, u8) -> bool> = Box::new(standard_selection);
         let mut min_radius @ mut max_radius = 0.;
 
         // functions
@@ -1086,22 +1086,20 @@ fn main() {
                     }
                     PlayerCalibration(pos) => {
                         if pos == -1 {
-                            println!("Player calibration started");
-                            arduino_com.send_string("full_reset");
-                            let mut output = "".to_string();
-                            while !output.starts_with("end") {
-                                output = arduino_com.read_line();
-                                // println!("f{:?}f", output.chars().collect::<Vec<char>>());
-                                println!("o: {}", output);
-                            }
-                            println!("Finished full reset!");
+                            // println!("Player calibration started");
+                            // arduino_com.send_string("full_reset");
+                            // let mut output = "".to_string();
+                            // while !output.starts_with("end") {
+                            //     output = arduino_com.read_line();
+                            //     // println!("f{:?}f", output.chars//().collect::<Vec<char>>());
+                            //     println!("o: {}", output);
+                            // }
+                            // println!("Finished full reset!");
                         } else {
-                            //     println!("Sending pos: {}", pos);
-                            //     // arduino_com.send_string(&format!("{}", pos));
                             //     arduino_com.send_string("check 20");
                             //     std::thread::sleep(std::time::Duration::from_secs(2));
                             // arduino_com.read_everything();
-                            arduino_com.send_string("I");
+                            // arduino_com.send_string("I");
                             let output = arduino_com.read_line();
                             println!("o: {}", output);
                             // output format:    Pos: 32
@@ -1113,10 +1111,11 @@ fn main() {
                                 .unwrap();
                             println!("pos: {}", pos);
                             player_calibration_positions.push(pos as i32);
+                            println!("Sending pos: {}", pos);
+                            arduino_com.send_string(&format!("{}", pos));
                         }
                     }
                     FinishPlayerCalibration(positions) => {
-                        // todo
                         println!("Player calibration finished");
                         println!(
                             "player_calibration_positions: {:?}, len: {}\npositions: {:?}, len: {}",
@@ -1139,7 +1138,7 @@ fn main() {
                         );
                         player_calibration_positions.clear();
                     }
-                    Command::SelectionFn{selection_type, r,g,b,sum} => {
+                    Command::SelectionFn { selection_type, r, g, b, sum } => {
                         selection_fn = match selection_type {
                             Selection::Separation => {
                                 // inputs for r g b
@@ -1160,7 +1159,7 @@ fn main() {
                             }
                         };
                     }
-                    Radius{min_radius: min, max_radius: max} => {
+                    Radius { min_radius: min, max_radius: max } => {
                         min_radius = min;
                         max_radius = max;
                     }
