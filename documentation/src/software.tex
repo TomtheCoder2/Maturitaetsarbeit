@@ -22,8 +22,8 @@ These elements are illustrated in the flowchart, shown in figure~\ref{fig:flowch
             \node (pro1) [process, below of=in1] {Undistortion};
             \node (pro2) [process, below of=pro1] {Ball detection};
             \node (pro3) [process, below of=pro2] {Prediction};
-            \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {Location?};
-            \node (pro5) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {Timing?};
+            \node (pro4) [process, below of=pro3, right of=pro3, xshift=1.5cm] {Location};
+            \node (pro5) [process, below of=pro3, left of=pro3, xshift=-1.5cm] {Timing};
             \node (out1) [io, below of=pro5, right of=pro5, xshift=1.5cm] {Arduino};
 
             % arrows
@@ -32,7 +32,7 @@ These elements are illustrated in the flowchart, shown in figure~\ref{fig:flowch
             \draw [arrow] (pro2) -- (pro3);
             \draw [arrow] (pro3) |- (pro4);
             \draw [arrow] (pro3) |- (pro5);
-            \draw [arrow] (pro4) |- (out1) node[below,midway] {Target player position};
+            \draw [arrow] (pro4) |- (out1) node[below,midway,xshift=0.5cm] {Target player position};
             \draw [arrow] (pro5) |- (out1) node[below,midway] {Shoot the ball};
 
 %%        make box around pro1 and pro2 as they are on the computer
