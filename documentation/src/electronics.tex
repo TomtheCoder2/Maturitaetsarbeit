@@ -1,52 +1,62 @@
 \section{General}\label{sec:general2}
+The electronics connects the PC to the motors and translates the commands from the PC to the motors.
+It is important that the electronics can operate fast, accurately and reliably.
 To move the motors I need a controller that sends the right commands to the motors.
 This is achieved by using an Arduino\autocite{arduino} and an arduino cnc shield\autocite{cnc-shield}, which with the help of the DRV8825\autocite{drv8825} driver controls the PD42-3-1141 stepper motor.
 The Pololu DC motor is driven by the L298N\autocite{l298n} stepper motor driver, which is also able to run DC motors.
 %\todo{Add eg circuit diagramm and/or irl image}
-A general flowchart of the electronics can be seen here:
+A general flowchart of the electronics is shown in figure~\ref{fig:general-flowchart_electronics}.
 
-\begin{center}
-    \begin{tikzpicture}[node distance=2cm]
-        \node (cm) [io] {Camera};
-        \node (image-proc) [process, below of=cm] {Image processing};
-        \node (ball-detection) [process, below of=image-proc] {Ball detection and prediction};
-        \node (arduino) [process, below of=ball-detection, yshift=0cm] {Arduino};
-        \node (cnc) [process, below of=arduino, right of=arduino, xshift=1.5cm] {CNC shield};
-        \node (cnc-text)  [above of=cnc, yshift=-1cm] {Target player position};
-        \node (drv) [process, below of=cnc] {DRV8825};
-        \node (stepper) [io, below of=drv] {Stepper Motor};
-        \node (stepper-text) [below of=stepper, yshift=1cm] {Move side};
-        \node (l298n) [process, below of=arduino, left of=arduino, xshift=-1.5cm] {L298N};
-        \node (shoot-text)  [above of=l298n, yshift=-1cm] {Shoot the ball};
-        \node (dc) [io, below of=l298n] {DC Motor};
-        \node (dc-text) [below of=dc, yshift=1cm] {Shoot side};
+\begin{figure}[H]
+    \centering
+    \begin{center}
+        \begin{tikzpicture}[node distance=2cm]
+            \node (cm) [io] {Camera};
+            \node (image-proc) [process, below of=cm] {Image processing};
+            \node (ball-detection) [process, below of=image-proc] {Ball detection and prediction};
+            \node (arduino) [process, below of=ball-detection, yshift=0cm] {Controller (Arduino)};
+            \node (cnc) [process, below of=arduino, right of=arduino, xshift=1.5cm] {CNC shield};
+            \node (cnc-text)  [above of=cnc, yshift=-1cm] {Target player position};
+            \node (drv) [process, below of=cnc] {DRV8825};
+            \node (stepper) [io, below of=drv] {Stepper motor};
+            \node (stepper-text) [below of=stepper, yshift=1cm] {Move side};
+            \node (l298n) [process, below of=arduino, left of=arduino, xshift=-1.5cm] {L298N};
+            \node (shoot-text)  [above of=l298n, yshift=-1cm] {Shoot the ball};
+            \node (dc) [io, below of=l298n] {DC motor};
+            \node (dc-text) [below of=dc, yshift=1cm] {Shoot side};
 
-        % arrows
-        \draw [arrow] (cm) -- (image-proc);
-        \draw [arrow] (image-proc) -- (ball-detection);
-        \draw [arrow] (ball-detection) -- (arduino);
+            % arrows
+            \draw [arrow] (cm) -- (image-proc);
+            \draw [arrow] (image-proc) -- (ball-detection);
+            \draw [arrow] (ball-detection) -- (arduino);
 %        node[midway, right] {Target player position} node[midway, left] {Shoot the ball};
-        \draw [arrow] (arduino) |- (cnc);
-        \draw [arrow] (cnc) -- (drv);
-        \draw [arrow] (drv) -- (stepper);
-        \draw [arrow] (arduino) |- (l298n);
-        \draw [arrow] (l298n) -- (dc);
+            \draw [arrow] (arduino) |- (cnc);
+            \draw [arrow] (cnc) -- (drv);
+            \draw [arrow] (drv) -- (stepper);
+            \draw [arrow] (arduino) |- (l298n);
+            \draw [arrow] (l298n) -- (dc);
 %        make box around image-proc and ball-detection as they are on the computer
-        \draw[red,thick] ($(image-proc.north west)+(-1.3,0.6)$)  rectangle ($(ball-detection.south east)+(0.3,-0.3)$) node[right,midway, xshift=3cm] {Software (cf. Chapter~\ref{ch:software})};
+            \draw[red,thick] ($(image-proc.north west)+(-1.3,0.6)$)  rectangle ($(ball-detection.south east)+(0.3,-0.3)$) node[right,midway, xshift=3cm] {Software (cf. Chapter~\ref{ch:software})};
 %       make box from l298n to stepper
-        \draw[red,thick] ($(l298n.north west)+(-1,2.3)$)  rectangle ($(stepper.south east)+(2.3,-0.9)$) node[below,midway, yshift=-4cm] {Electronics (cf. Chapter~\ref{ch:electronics})};
-    \end{tikzpicture}
-\end{center}
+            \draw[red,thick] ($(l298n.north west)+(-1,2.3)$)  rectangle ($(stepper.south east)+(2.3,-0.9)$) node[below,midway, yshift=-4cm] {Electronics (cf. Chapter~\ref{ch:electronics})};
+        \end{tikzpicture}
+    \end{center}
+    \caption{General flowchart of the electronics}
+    \label{fig:general-flowchart_electronics}
+\end{figure}
 The whole flowchart can be seen in the appendix~\ref{sec:whole-flowchart}.
 
 
-\section{DC Motor}\label{sec:dc-motor}
-A DC Motor has two coils and therefore two inputs and the direction is controlled by the polarity of the two inputs.
+\section{DC motor}\label{sec:dc-motor}
+The DC motor has the task of shooting the ball.
+A DC motor has two coils and therefore two inputs and the direction is controlled by the polarity of the two inputs.
 The speed can be controlled by only sending short pulses of power.
 To read out the position of the motor an encoder is used.
 The encoder attachment at the end of the motor (the black part) contains a disk with small slits that rotates with the motor and a sensor (often optical) that recognizes when the slit passes.
 The position can now be calculated by counting those passes, and because there are two sensors, the direction can be determined by looking at the phase difference.
-A graph of the outputs can be seen here:
+Figure~\ref{fig:encoder} shows the encoder output when the motor is turning.
+The difference between the two graphs is the phase difference, which is used to determine the direction.
+Depending on the direction the encoder A or the encoder B sensor is triggered first.
 \begin{center}
     \begin{figure}[H]
         \centering
@@ -55,7 +65,7 @@ A graph of the outputs can be seen here:
             \begin{tikzpicture}
                 \centering
                 \begin{axis}
-                    [
+                [
                     axis x line=center,
                     axis y line=center,
 %                    width={0.4\linewidth},
@@ -63,16 +73,16 @@ A graph of the outputs can be seen here:
                     xtick=none,
                     ytick={0,1},
                     yticklabels={low, high},
-                    xlabel=$t$,
-                    ylabel=$V$,
+                    xlabel=Time,
+                    ylabel=Voltage,
                     xlabel style={below right},
-                    ylabel style={above left},
+                    ylabel style={above center},
                     xmin=-2,
                     xmax=22,
                     ymin=-0.2,
                     ymax=1.5,
                     legend pos=north east
-                    ]
+                ]
 
                     \addplot [blue,const plot] table {
                         0 0
@@ -108,7 +118,7 @@ A graph of the outputs can be seen here:
             \begin{tikzpicture}
                 \centering
                 \begin{axis}
-                    [
+                [
                     axis x line=center,
                     axis y line=center,
 %                    width={0.4\linewidth},
@@ -116,10 +126,10 @@ A graph of the outputs can be seen here:
                     xtick=none,
                     ytick={0,1},
                     yticklabels={low, high},
-                    xlabel={$t$},
-                    ylabel={$V$},
+                    xlabel=Time,
+                    ylabel=Voltage,
                     xlabel style={below right},
-                    ylabel style={above left},
+                    ylabel style={above center},
                     xmin=-2,
                     xmax=22,
                     ymin=-0.2,
@@ -178,7 +188,8 @@ pub fn count_pos(&mut self, a_b: (bool, bool)) -> i32 {
 \end{lstlisting}
 
 
-\section{Stepper Motor}\label{sec:stepper-motor}
+\section{Stepper motor}\label{sec:stepper-motor}
+The stepper motor has the task of moving the player.
 The PD42-3-1141 stepper motor does not have an encoder, so the program first sets the position to $0$ and then the motor can always drive $N$ steps relative to the current position and recompute the position of the stepper motor.
 One problem that can occur is that the motor skips steps, especially when sending the step command with a low delay in between.
 To mitigate this problem, I let the motor accelerate, which is done by starting with a long delay and then lowering it.
@@ -217,10 +228,11 @@ void loop {
     }
 }
 \end{lstlisting}
-Its important that the code first rounds the input to the next integer which is divisible by the step-resolution, in this case 4, because the motor can only stop at full steps.\\
+Its important that the code first rounds the input to the next integer which is divisible by the step-resolution, in this case, because the motor can only stop at full steps.\\
 \vspace{0.5cm}\\
 %\todo{This part describes my personal experincies, should I make it more objectiv and dont mention the failures or leave it liek it is currently?}
-The PD42-3-1141 stepper motor has 200 steps per rotation, that means the controller sends 200 step-commands until one full rotation is achieved.
+The PD42-3-1141 stepper motor has 200 steps per rotation.
+That means the controller sends 200 step-commands until one full rotation is achieved.
 But stepper motors can also do smaller steps, called half, 1/4, 1/8 etc. steps.
 The smaller the steps, the higher the accuracy.
 I chose 1/4 steps because the smaller the steps, the slower the motor and 1/4 seemed a good compromise.
@@ -230,21 +242,23 @@ It just vibrated and did not move.
 So switched to the same driver that I use for the DC motor, because it is actually a stepper motor driver that can also drive DC motors.
 That surprisingly worked, and I could control the motor.
 But I couldn't do micro steps as the LN298N driver does not support it.
-After speaking with some colleagues, they suggested looking at the whole construction as a CNC machine, I know that sounds a little bit strange, but a CNC machine is technically also just some motors controlled by one or more controllers.
+After speaking with some colleagues, they suggested looking at the whole construction as a CNC machine.
+I know that sounds a little bit strange, but a CNC machine is technically also just some motors controlled by one or more controllers.
 Therefore, I bought a CNC shield\autocite{cnc-shield} for the arduino, which is a shield that can control up to 4 stepper motors.
 The shields do not come with drivers, so I had to buy them separately.
 I did not want to make the same mistake again, so I checked some reviews and found the DRV8825\autocite{drv8825} driver, which can do up to 1/32 steps and is also compatible with the CNC shield.
 After some soldering and connecting the motors to the shield, I can now control the motors with the arduino.
 The next problem with the stepper motor is that it sometimes skips steps.
 Skipping one step though is not a huge problem, but after some time the small errors add up and the motor is out of sync.
-To mitigate this problem, I added an IR distance sensor to the motor, which measures the distance which the tube has traveled and then adjusts the position of the stepper motor.
 \begin{figure}[H]
     \centering
     \includegraphics[width=.3\linewidth]{../photos/cnc_shield}
     \caption{CNC Shield}
     \label{fig:cnc_shield}
 \end{figure}
-\subsection{IR Distance Sensor}\label{subsec:ir-distance-sensor}
+
+\subsection{IR distance sensor}\label{subsec:ir-distance-sensor}
+To mitigate the problem of skipping steps, I added an IR distance sensor to the motor, which measures the distance which the tube has traveled and then adjusts the position of the stepper motor.
 I use the GP2Y0E03\autocite{ir-sensor} infrared sensor, which, as the name suggests, uses Infrared red rays to measure the distance between the side of the table and the player.
 This is done by emitting a short pulse with a photo diode and then measuring the time it took to reflect of the player and come back to the sensor, dividing the measured time by the speed of light and by two seconds, yields the distance.
 The sensor outputs this distance either as a digital signal with the I2C protocol or as voltage difference, also called analog output.

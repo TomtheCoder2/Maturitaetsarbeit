@@ -1,4 +1,39 @@
-\section{Whole Flowchart}\label{sec:whole-flowchart}
+\section{Images}\label{sec:images}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{../photos/glass_table}
+    \caption{Foosball table after with glass floor}
+    \label{fig:glass_table}
+\end{figure}
+
+
+\section{CNN}\label{sec:cnn}
+
+\subsection{CNN architecture}\label{subsec:cnn-architecture}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[height=.7\paperheight]{../photos/fiducial_classifier_model}
+    \caption[originalRainbow]{Fiducial classifier model}
+    \label{fig:fiducial_classifier_model}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[height=.8\paperheight]{../photos/fiducial_coords_model}
+    \caption[originalRainbow]{Fiducial coordinates model}
+    \label{fig:fiducial_coords_model}
+\end{figure}
+\newpage
+\subsection{Grad-CAM}\label{subsec:gradcam}
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width=.8\textwidth]{../photos/gradcam_combined_image}
+    \caption[originalRainbow]{Grad-CAM of all the layers in the fiducial coordinates model}
+    \label{fig:gradcam}
+\end{figure}
+
+
+\section{Whole flowchart}\label{sec:whole-flowchart}
 
 \begin{center}
     \begin{tikzpicture}[node distance=2cm]
@@ -44,3 +79,5 @@
         \draw[red,thick] ($(l298n.north west)+(-1,2.3)$)  rectangle ($(stepper.south east)+(2.3,-0.9)$) node[below,midway, yshift=-4cm] {Electronics (cf. Chapter~\ref{ch:electronics})};
     \end{tikzpicture}
 \end{center}
+
+

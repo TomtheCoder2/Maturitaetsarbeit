@@ -1,5 +1,5 @@
-% Preamble
-\documentclass[11pt,openany]{book}
+﻿% Preamble
+\documentclass[11pt,openany, english]{book}
 \usepackage[a4paper, total={6in, 8in},headsep=0.5cm]{geometry}
 
 % Packages
@@ -32,9 +32,10 @@
 %\usepackage{biblatex}
 \usepackage[backend=bibtex, urldate=long,
     sorting=none,
+    maxnames=10,
     defernumbers,style=numeric,autocite=superscript]{biblatex}
 \addbibresource{sources.bib}
-\usepackage[fixlanguage]{babelbib}
+%\usepackage[fixlanguage]{babelbib}
 %\DefineBibliographyStrings[english]{%
 %    urlseen={last visited},
 %}
@@ -46,6 +47,7 @@
 \usepackage{color}
 \usepackage{listings}
 \usepackage{calc}
+\usepackage{settobox}
 %\usepackage{biblatex}
 \definecolor{GrayCodeBlock}{RGB}{241,241,241}
 \definecolor{BlackText}{RGB}{110,107,94}
@@ -67,7 +69,7 @@
     framexbottommargin=3pt,
     xleftmargin=4pt,
     xrightmargin=4pt,
-    numbers=left, % display line numbers on the left
+%    numbers=left, % display line numbers on the left
     backgroundcolor=\color{GrayCodeBlock},
     basicstyle=\ttfamily\color{BlackText},
     keywords={
@@ -108,7 +110,7 @@
     framexbottommargin=3pt,
     xleftmargin=4pt,
     xrightmargin=4pt,
-    numbers=left, % display line numbers on the left
+%    numbers=left, % display line numbers on the left
     backgroundcolor=\color{GrayCodeBlock},
     basicstyle=\ttfamily\color{BlackText},
     keywords={
@@ -190,7 +192,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 \oddsidemargin=-1cm
 \evensidemargin=-1cm
-\voffset=-1.7cm
+\voffset=-1.5cm
 \textheight=26cm
 \textwidth=18cm
 
@@ -220,13 +222,15 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \linespread{1}
     \Huge \textbf{Designing, assembling and programming a foosball goalkeeper robot}\\
     \linespread{1.8}
+    \vspace{0.5cm}
     \begin{figure}[H]
         \centering
         \includegraphics[width=0.55\linewidth]{../photos/title}
         \caption*{}
         \label{fig:title}
     \end{figure}
-\Large
+    \vspace{-0.8cm}
+    \Large
     \textbf{Maturitätsarbeit}\\
     Kantonsschule Hohe Promenade, Gymnasium, Zürich/2024\\
     \textbf{Supervisor:} Clemens Pohle\\
@@ -241,13 +245,14 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 \begin{document}
 
     \makeatletter
-    \voffset=-1cm
+    \voffset=-1.5cm
     \begin{titlepage}
         \thispagestyle{fancy}
         \renewcommand{\headrulewidth}{0pt}
         \renewcommand{\footrulewidth}{0pt}
         \lhead{\includegraphics[scale=0.5]{../photos/hopro_logo}}
         \rhead{}
+        \rfoot{}
         \cfoot{} % this is to remove the page number
         \hbox{}\vfill
         \begin{center}
@@ -272,13 +277,55 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
     \renewcommand{\bottompage}{}
     \tableofcontents
-%    \newpage
+    \newpage
+
+
+    ~\\
+    \section*{Abstract}
+    \begin{abstract}
+        Whether a machine can beat a human in a specific task is as old as the first machines.
+        Machines have already surpassed humans in many areas, such as calculators, chess,
+        and even driving cars.
+        But what about foosball (table soccer)?
+        This project demonstrates the development of a machine-controlled goalkeeper for foosball,
+        capable of reliably stopping slow balls.
+        While the goalkeeper occasionally struggles with the timing required for fast balls and shooting,
+        the results serve as a proof of concept.
+        The machine uses a camera to monitor the game from below and motors to move the goalkeeper.
+        Although only basic AI was employed,
+        the approach shows promise for extending similar designs to other players on the table.
+        This work highlights the potential of automated systems in fast-paced, real-time scenarios,
+        while acknowledging room for improvement to enhance performance and timing.
+    \end{abstract}
+    \vspace{1cm}
+
+
+    \section*{Acknowledgements}
+    I would like to express my heartfelt gratitude to the following individuals and organizations for their invaluable support and contributions to my project:
+    \begin{itemize}
+        \item My parents, for their financial and technical support and encouragement throughout this journey.
+        \item Ilena Teng and her father Robert Teng, for their assistance in soldering the cables to the IR sensor and understanding how the sensor works.
+        \item FabLab, for providing access to laser cutting, 3D printing, and CNC machining, and for the helpful guidance of the team members.
+        \item Gabriel Schneider from ZHAW, for his expertise and support in the design process.
+        \item Clemens Pohle, for his continuous supervision and insightful feedback, which greatly improved the quality of this documentation.
+    \end{itemize}
+    Thank you all for your generosity and dedication, which made this project possible.
+
+    \vspace{1cm}
+    \section*{Statement of Originality}
+    Ich, Jan Wilhelm aus der Klasse 6e, erkläre hiermit, dass ich die vorliegende Arbeit "Designing, assembling and programming a foosball goalkeeper robot" selbständig und ohne Benützung anderer als der angegebenen Quellen oder Hilfsmittel verfasst bzw. gestaltet habe.
+    \vspace{0.5cm}\\
+    Ort, Datum: \hspace{6cm} Unterschrift:
 
 
     \chapter{Introduction}\label{ch:introduction}
     \renewcommand{\bottompage}{-- \thepage\ --}
     \setcounter{page}{1}
     \input{introduction}
+
+
+    \chapter{Objectives}\label{ch:objectives}
+    \input{objectives}
 
 
     \chapter{Calculations}\label{ch:calculations}
@@ -309,10 +356,12 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     \chapter{Conclusion}\label{ch:conclusion}
     \input{conclusion}
 
-%    \chapter{References}\label{ch:references}
+    \newpage
+    \renewcommand{\footl}{References}
 
-    \bibliographystyle{plain}
+    \bibliographystyle{abbrv}
     \printbibliography
+
 %    \newpage
 %    \bibliographystyle{unsrt}
 %%    \renewcommand\refname{Quellen}
@@ -323,8 +372,11 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 %    \printbibliography
 %    \nocite{*}
 
+    \newpage
+
 
     \chapter{Appendix}\label{ch:appendix}
+    \renewcommand{\footl}{\Chaptername}
     \input{appendix}
 
 \end{document}
