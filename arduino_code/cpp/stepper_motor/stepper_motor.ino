@@ -33,15 +33,15 @@ int dc_target = 0;
 int dc_mode = 0;
 // unsigned long count_reset = 0;
 // unsigned long count_shoot = 0;
-unsigned long start_reset = millis() + 10000;
-unsigned long start_shoot = millis() + 10000;
+unsigned long start_reset = -100000;
+unsigned long start_shoot = -1000000;
 unsigned long shoot_intervall = 150;
-unsigned long reset_intervall = 150;
+unsigned long reset_intervall = 300;
 
 int apos = 0;
 int avout = 319;
 int bpos = 340;
-int bvout = 436;
+int bvout = 445;
 
 int count = 0;
 int checkPos = 0;
@@ -95,7 +95,7 @@ void normal_new(int input_int) {
   // Serial.print(F("Target updated: "));
   // Serial.println(targetPosition);
   // set checkPos to 2, so that it checks the pos after going there, that makes it more accurate
-  checkPos = max(checkPos, 2);
+  checkPos = max(checkPos, 5);
 }
 
 void normal() {
@@ -197,6 +197,7 @@ void setup() {
   delayMicroseconds(500 * 1000);
   digitalWrite(enPin, HIGH);
   dc_setup();
+  stop();
   ir_setup();
   Serial.println(F("Ready for position commands"));
 }
@@ -229,6 +230,7 @@ void loop() {
       }
       reset_dc_pos();
       Serial.println("Reset dc motor");
+      return;
     }
     if (input == "dc pos") {
       Serial.print("dc pos:");
@@ -257,6 +259,11 @@ void loop() {
       reset_intervall = input_int;
       Serial.print("Set reset_intervall to: ");
       Serial.println(reset_intervall);
+      return;
+    }
+    if (input == "sync") {
+      Serial.println("");
+      Serial.println("end");
       return;
     }
     if (input == "I") {
@@ -376,7 +383,7 @@ void loop() {
         // count_shoot = 10000;
         start_shoot = millis();
       } else if (dc_mode == 3) {
-        Serial.println("reseting dc pos");
+        // Serial.println("reseting dc pos");
         reset_dc_pos();
         dc_mode = 0;
         dc_target = 0;
