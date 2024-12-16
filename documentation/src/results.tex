@@ -17,6 +17,18 @@ This can be fixed by using the custom PCB provided by the company, which uses th
 The precision has not yet reached $1\mathrm{mm}$.
 Measuring it precisely is challenging because the closer the player is, the more precise the IR sensor needs to be.
 Additionally, the IR sensor occasionally fails to measure the distance correctly, leading to improper movement of the player.
+\subsection{Tests}\label{subsec:tests}
+To evaluate the precision of the system, I set up a test environment involving the robot and random ball throws to simulate game conditions where balls are also thrown unpredictably.\\
+Initially, slow-moving balls were tested.
+Out of $20$ balls, the goalkeeper successfully stopped $14$.
+Next, fast-moving balls were tested, with the goalkeeper stopping $10$ out of $20$.
+The missed balls were often due to the stepper motor moving too quickly and overshooting its target.
+This issue can likely be mitigated by further tuning variables such as the motor's acceleration and deceleration.\\
+The first tests using the RS485 communication standard were also promising.
+The motor consistently moved to the correct position, albeit at a much slower speed compared to the current implementation.
+This slowdown can be addressed by adjusting the PCB settings, which I plan to optimize in future tests.\\
+Shooting the ball, while standing still, works very well, which was quite surprising after having made a mistake during the calculations.
+During movement, the ball is not always shot at the correct moment in time, which is due to the very precise timing required.
 
 \section{Image processing and optics}\label{sec:results_image}
 The undistortion function works very well, largely due to a high level of iterations of the calibration process.

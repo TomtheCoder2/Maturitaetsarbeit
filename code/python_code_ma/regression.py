@@ -2,7 +2,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # positions = [[206, 290], [260, 274], [179, 302], [141, 319], [102, 339], [91, 359], [363, 238]]
-positions = [[31, 361], [96, 330], [155, 310], [219, 286], [270, 269], [343, 244], [37, 361]]
+# positions = [[31, 361], [96, 330], [155, 310], [219, 286], [270, 269], [343, 244], [37, 361]]
+
+# positions = [[55, 352], [54, 352], [91, 335], [150, 313], [205, 291], [254, 270], [296, 256]] # good data for doc
+# positions = [[0, 357], [50, 340], [100, 317], [150, 303], [200, 282], [250, 269], [300, 246]] # good data for doc (rs485)
+# positions = [[1, 361], [47, 348], [96, 330], [144, 315], [211, 289], [254, 270], [303, 257]]
+# positions = [[210, 283], [50, 345], [100, 325], [150, 305], [200, 286], [250, 269], [300, 250]]
+positions = [[262, 245], [50, 323], [100, 310], [150, 289], [200, 266], [250, 245], [300, 232]]
 
 def fit_regression(x, y, degree=3):
     """Fits linear and polynomial regressions."""
@@ -21,7 +27,8 @@ def format_polynomial10(coeffs):
     """Formats a polynomial equation string."""
     terms = [f"{coeff:.10f}x^{i}" if i > 0 else f"{coeff:.10f}" for i, coeff in enumerate(reversed(coeffs))]
     # let x = -0.0002964358 * y.powi(3) + 0.2742589884 * y.powi(2) - 86.9730877714 * y + 9594.7333153706;
-    terms_rust = [f"{coeff:.10f} * y.powi({i})" if i > 0 else f"{coeff:.10f}" for i, coeff in enumerate(reversed(coeffs))]
+    terms_rust = [f"{coeff:.10f} * y.powi({i})" if i > 0 else f"{coeff:.10f}" for i, coeff in
+                  enumerate(reversed(coeffs))]
     print(f"let x = {' + '.join(terms_rust[::-1])};")
     return " + ".join(terms[::-1])
 

@@ -9,6 +9,7 @@ use std::thread::sleep;
 
 pub struct ArduinoCom {
     serial: Box<dyn SerialPort>,
+    last_command: String
 }
 
 impl Debug for ArduinoCom {
@@ -46,12 +47,12 @@ impl ArduinoCom {
         let mut port = serialport::open_with_settings(&port_name, &serial_settings)
             .expect("Failed to open port");
         // send start command and wait for response
-        let mut arduino_com = ArduinoCom { serial: port };
+        let mut arduino_com = ArduinoCom { serial: port, last_command: "".to_string() };
         // arduino_com.send_command(Command::Start);
         // println!("start command sent");
         // let c = arduino_com.receive_command();
         // println!("Received command: {:?}", c);
-        arduino_com.send_string("R");
+        // arduino_com.send_string("R");
         arduino_com
     }
 
@@ -120,6 +121,15 @@ impl ArduinoCom {
     }
 
     pub fn send_string(&mut self, s: &str) {
+        if s == self.last_command {
+            return;
+        }
+        writeln!(self.serial, "{}", s).expect("Failed to write to port");
+        self.serial.flush().expect("Failed to flush port");
+        // println!("Sent: {}", s);
+    }
+
+    pub fn force_send_string(&mut self, s: &str) {
         writeln!(self.serial, "{}", s).expect("Failed to write to port");
         self.serial.flush().expect("Failed to flush port");
         // println!("Sent: {}", s);
@@ -152,5 +162,16 @@ impl ArduinoCom {
             buffer.push(c);
         }
         buffer
+    }
+
+    pub fn sync(&mut self) {
+        self.send_string("sync");
+        let mut output = "".to_string();
+        while !output.starts_with("end") {
+            output = self.read_line();
+            // println!("f{:?}f", output.chars//().collect::<Vec<char>>());
+            println!("sync o: {}", output);
+        }
+        println!("Finished syncing");
     }
 }

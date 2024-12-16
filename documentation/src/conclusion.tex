@@ -72,6 +72,10 @@ I suggest the following improvements:
 A new way to control the stepper motor, the code written by me that accelerates and decelerates the motor is good enough for slow movements but for fast movements its not sophisticated enough.
 Therefore, I would like to use code specifically made for this stepper motor, which the company has already provided with the motor with a custom PCB at the back.
 Currently, I was not able to use that circuit board, because I was not aware of the fact that the arduino, with a additional breakout board, supports the RS458 communication standard.
+\subsection*{Adding switches}
+I would like to add switches to the tube, so that the motor knows when it reaches the end.
+This would make the calibration process much easier, as the motor would just have to move the tube until it reaches the switch.
+Furthermore, it would provide a safety feature, as the motor would stop moving if the tube is blocked.
 \subsection*{Adding the missing players}
 I would like to extend the table by adding the missing players in the team, by manufacturing the same parts again three times.
 A small problem is the fact that the defender travels more than half the width of the table, meaning I wont be able to connect the shoot motor in the same way as the player.
@@ -79,6 +83,7 @@ To solve this issue, I will build an extended holder offset to the side, providi
 \subsection*{Camera frame rate}
 Currently the camera captures the whole table with a framerate of $149$ fps, which is sufficient for slow balls, but the accuracy could be greatly improved by only capturing a small rectangle of the table, but at a higher framerate.
 This frame will then be moved around, according to the last position and the current velocity of the ball.
-
-
+\subsection*{Speed measurement}
+The speed of the ball could be measured by the camera, which would could be converted to $m/s$ and shown on a display.
+This feature could be used to measure the speed of the ball, and to adjust the speed of the player accordingly.
 

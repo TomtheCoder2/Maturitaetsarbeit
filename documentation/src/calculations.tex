@@ -1,7 +1,4 @@
-﻿
-
-
-\section{The foosball robot system}\label{sec:system}
+﻿\section{The foosball robot system}\label{sec:system}
 A simple diagramm of the final system is shown in the figure~\ref{fig:system}.
 The system consists of a camera below the table, to monitor the game.
 The camera is connected to a PC, which processes the images and sends the commands to the controller unit.
@@ -67,7 +64,7 @@ Figure~\ref{fig:table_measurements} illustrates these measurements:
     \begin{figure}[H]
         \centering
         \begin{tikzpicture}
-            \node[anchor=south west,inner sep=0] (image) at (0,0) {\includegraphics[width=0.5\textwidth]{../photos/foosball_table}};
+            \node[anchor=south west,inner sep=0] (image) at (0,0) {\includegraphics[width=0.5\textwidth, opacity=0.8]{../photos/foosball_table}};
             \begin{scope}
                 [x={(image.south east)},y={(image.north west)}]
 %        \draw[help lines,xstep=.1,ystep=.1] (0,0) grid (1,1);
@@ -75,9 +72,9 @@ Figure~\ref{fig:table_measurements} illustrates these measurements:
 %        \foreach \y in {0,1,...,9} { \node [anchor=east] at (0,\y/10) {0.\y}; }
                 \def \tubex {0.76};
 %        \draw[red,ultra thick,rounded corners] (0.62,0.65) rectangle (0.78,0.75);
-                \draw[<->,blue!80!black!50,rounded corners, line width=1.5mm] (\tubex, 0.9)  -- (\tubex, 0.65) node[midway, left, fill=white, fill opacity=0.8,text opacity=1,rounded corners=2pt,inner sep=1pt] {\huge \textbf{180mm}};
-                \draw[<->,blue!80!black!100,rounded corners, line width=1.5mm] (0.85, 0.9)  -- (0.85, 0.09) node[pos=0.85, left, fill=white, fill opacity=0.8,text opacity=1,rounded corners=2pt,inner sep=1pt] {\huge \textbf{700mm}};
-                \draw[<->,blue!80!black!70,rounded corners, line width=1.5mm] (0.335, 0.5)  -- (0.775, 0.5) node[pos=0.85, left, fill=white, fill opacity=0.8,text opacity=1,rounded corners=2pt,inner sep=1pt] {\huge \textbf{400mm}};
+                \draw[<->,white,rounded corners, line width=1.5mm] (\tubex, 0.9)  -- (\tubex, 0.65) node[midway, left, fill=black, fill opacity=0.8,text opacity=1,rounded corners=2pt,inner sep=1pt] {\huge \textbf{180mm}};
+                \draw[<->,white,rounded corners, line width=1.5mm] (0.85, 0.9)  -- (0.85, 0.09) node[pos=0.85, left, fill=black, fill opacity=0.8,text opacity=1,rounded corners=2pt,inner sep=1pt] {\huge \textbf{700mm}};
+                \draw[<->,white,rounded corners, line width=1.5mm] (0.335, 0.5)  -- (0.775, 0.5) node[pos=0.85, left, fill=black, fill opacity=0.8,text opacity=1,rounded corners=2pt,inner sep=1pt] {\huge \textbf{400mm}};
 
             \end{scope}
         \end{tikzpicture}

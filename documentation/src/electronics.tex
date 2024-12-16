@@ -228,10 +228,19 @@ void loop {
     }
 }
 \end{lstlisting}
-Its important that the code first rounds the input to the next integer which is divisible by the step-resolution, in this case, because the motor can only stop at full steps.\\
-\vspace{0.5cm}\\
+It is important that the code first rounds the input to the next integer which is divisible by the step-resolution, in this case, because the motor can only stop at full steps.\\
+%~\\
+\par
+\begin{wrapfigure}{r}{0.23\textwidth}
+    \centering
+    \vspace{-0.5cm}
+    \includegraphics[width=.23\textwidth]{../photos/cnc_shield}
+    \caption{CNC Shield}
+    \vspace{-0.5cm}
+    \label{fig:cnc_shield}
+\end{wrapfigure}
 %\todo{This part describes my personal experincies, should I make it more objectiv and dont mention the failures or leave it liek it is currently?}
-The PD42-3-1141 stepper motor has 200 steps per rotation.
+\noindent The PD42-3-1141 stepper motor has 200 steps per rotation.
 That means the controller sends 200 step-commands until one full rotation is achieved.
 But stepper motors can also do smaller steps, called half, 1/4, 1/8 etc. steps.
 The smaller the steps, the higher the accuracy.
@@ -244,32 +253,76 @@ That surprisingly worked, and I could control the motor.
 But I couldn't do micro steps as the LN298N driver does not support it.
 After speaking with some colleagues, they suggested looking at the whole construction as a CNC machine.
 I know that sounds a little bit strange, but a CNC machine is technically also just some motors controlled by one or more controllers.
-Therefore, I bought a CNC shield\autocite{cnc-shield} for the arduino, which is a shield that can control up to 4 stepper motors.
+Therefore, I bought a CNC shield\autocite{cnc-shield}, shown in figure~\ref{fig:cnc_shield}, for the arduino, which is a shield that can control up to 4 stepper motors.
 The shields do not come with drivers, so I had to buy them separately.
 I did not want to make the same mistake again, so I checked some reviews and found the DRV8825\autocite{drv8825} driver, which can do up to 1/32 steps and is also compatible with the CNC shield.
 After some soldering and connecting the motors to the shield, I can now control the motors with the arduino.
 The next problem with the stepper motor is that it sometimes skips steps.
 Skipping one step though is not a huge problem, but after some time the small errors add up and the motor is out of sync.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=.3\linewidth]{../photos/cnc_shield}
-    \caption{CNC Shield}
-    \label{fig:cnc_shield}
-\end{figure}
 
 \subsection{IR distance sensor}\label{subsec:ir-distance-sensor}
 To mitigate the problem of skipping steps, I added an IR distance sensor to the motor, which measures the distance which the tube has traveled and then adjusts the position of the stepper motor.
 I use the GP2Y0E03\autocite{ir-sensor} infrared sensor, which, as the name suggests, uses Infrared red rays to measure the distance between the side of the table and the player.
 This is done by emitting a short pulse with a photo diode and then measuring the time it took to reflect of the player and come back to the sensor, dividing the measured time by the speed of light and by two seconds, yields the distance.
-The sensor outputs this distance either as a digital signal with the I2C protocol or as voltage difference, also called analog output.
+The sensor outputs this distance either as a digital signal with the I2C\autocite{i2c} protocol or as voltage difference, also called analog output.
 As the digital output does not have a high resolution, the analog output is used, as it has a nearly 10x resolution.
 But higher resolution does not automatically mean higher accuracy and that was also confirmed by the data I collected.
-Luckily, the data seems to follow a binomial distribution, so by taking the average of $\approx100$ values, the program gets a good estimate of the actual value.
+Luckily, the data seems to follow a binomial distribution, so by taking the average of $\sim 100$ values, the program gets a good estimate of the actual value.
 The integration of the measured data is relatively straight-forward, after moving to a specific position, the real distance is compared to the target distance and then the difference is corrected for.
-This process is repeated roughly $5-10$ times, which often results in a back-and-forth motion, but the positions get more accurate with each iteration.
+This process is repeated roughly $5-10$ times, which often results in a back-and-forth motion, but the positions get more accurate with each iteration.\\
+The figure~\ref{fig:ir-sensor-data} shows the measured data of the IR sensor.
+In the best case scenario, the data would be a straight line and it is nearly a straight line with a mean squared error\autocite{mean-sqrt-error} of $\sim 6.994$, which is quite good.
+The plot relates the pixel coordinates with the actual measurements from the IR sensor.
+The line has a negative gradient, because the image, captured by the camera, is flipped.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \pgfplotsset{width=10cm,
+            compat=1.3,
+            legend style={font=\footnotesize}}
+        \begin{axis}
+        [
+            xlabel={Pixel coordinate},
+            ylabel={IR Sensor Voltage},
+            legend cell align=left,
+            legend pos=north east]
+            \addplot[only marks, blue] table[row sep=\\]{
+                X Y\\
+                352 55\\
+                352 54\\
+                335 91\\
+                313 150\\
+                291 205\\
+                270 254\\
+                256 296\\
+            };
+            \addlegendentry{IR Sensor Voltage}
+            \addplot[no markers, red] table[row sep=\\,
+            y={create col/linear regression={y=Y}}] % compute a linear regression from the
+            %input table
+                {
+                X Y\\
+                352 55\\
+                352 54\\
+                335 91\\
+                313 150\\
+                291 205\\
+                270 254\\
+                256 296\\
+            };
+            \addlegendentry{%
+                $\pgfmathprintnumber{\pgfplotstableregressiona} \cdot x
+                \pgfmathprintnumber[print sign]{\pgfplotstableregressionb}$ lin. Regression} %
+        \end{axis}
+    \end{tikzpicture}
+    \caption{IR sensor data}
+    \label{fig:ir-sensor-data}
+\end{figure}
+\vspace{-1cm}
 
 \subsection{Arduino code}\label{subsec:arduino-code}
-Why do I use c++ for the code running on the arduino?
+Why do I use c++\autocite{arduino-c++} for the code running on the arduino?
 Usually I want to write all my code in rust, as it is a memory safe language and has a lot of other advantages, because it is quite new and has a lot of modern features.
 One feature is the ease of importing other libraries, which in rust are called crates, which is not as easy in c++.
 There is an arduino framework for rust, but I had problems with the serial connection, I couldn't get it to work reliably.
