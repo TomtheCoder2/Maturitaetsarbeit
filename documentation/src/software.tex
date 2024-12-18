@@ -50,7 +50,7 @@ The code can be found on GitHub\footnote{\url{https://github.com/TomtheCoder2/Ma
 
 
 \section{Optics}\label{sec:optics}
-The goal here is to correct for lens distortion, this can be achieved by capturing many images containing a checkerboard pattern with known gird size, in this is case 8x8 and then letting an algorithm compute the distortion coefficients and the camera matrix.
+The goal here is to correct for lens distortion, this can be achieved by capturing many images containing a checkerboard pattern with known grid size, in this is case 8x8 and then letting an algorithm compute the distortion coefficients and the camera matrix.
 One such image is shown in figure~\ref{fig:calibration_image}.
 A sever is distortion is visible in the image, as the table is actually a rectangle, this can be corrected by using the OpenCV library.
 \begin{figure}[H]
@@ -374,7 +374,7 @@ Figure~\ref{fig:fiducials_all} shows the fiducials.
     \label{fig:fiducials_all}
 \end{figure}
 To calibrate the real world coordinates one has to detect the fiducials reliably in the image.
-This can be done by using a convolutional neural network (CNN) to detect the fiducials.
+This can be done by using a convolutional neural network (CNN)\autocite{cnn} to detect the fiducials.
 
 \subsubsection{Training data}\label{subsubsec:training-data}
 To train the CNN, one needs a lot of images containing the fiducials, making such a lot of images and then checking where exactly the coordinates of the midpoint of the fiducial lies is very tedious and not practical.

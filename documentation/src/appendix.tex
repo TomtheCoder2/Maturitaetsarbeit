@@ -1,9 +1,18 @@
 \section{Images}\label{sec:images}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.7\linewidth]{../photos/glass_table}
-    \caption{Foosball table after with glass floor}
-    \label{fig:glass_table}
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=0.9\linewidth]{../photos/glass_table}
+        \caption{Foosball table with glass floor}
+        \label{fig:glass_table}
+    \end{subfigure}%
+    \begin{subfigure}{.5\textwidth}
+        \centering
+        \includegraphics[width=0.9\linewidth]{../photos/connector_tube}
+        \caption{Connection on the shoot side}
+        \label{fig:connector_tube}
+    \end{subfigure}
 \end{figure}
 
 
@@ -24,10 +33,11 @@
     \label{fig:fiducial_coords_model}
 \end{figure}
 \newpage
+
 \subsection{Grad-CAM}\label{subsec:gradcam}
 \begin{figure}[!ht]
     \centering
-    \includegraphics[width=.8\textwidth]{../photos/gradcam_combined_image}
+    \includegraphics[width=\textwidth]{../photos/gradcam_combined_image}
     \caption[originalRainbow]{Grad-CAM of all the layers in the fiducial coordinates model}
     \label{fig:gradcam}
 \end{figure}

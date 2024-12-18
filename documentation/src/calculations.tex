@@ -132,7 +132,7 @@ A graph to explain the velocity can be seen here:
 \end{center}
 
 \noindent Which means the player has a top speed of $v_{max}=2\cdot1.75m/s=3.5m/s$.
-The motor also needs to be able to accelerate the player in $0.057s/2=0.0285$, which means the motor needs to be able to achieve a maximum acceleration $a_{max}$ of
+The motor also needs to be able to accelerate the player in $0.057s/2=0.0285s$, which means the motor needs to be able to achieve a maximum acceleration $a_{max}$ of
 \begin{equation}
     \label{eq:acceleration}
     a_{max} = \frac{v_{max}}{t_s} = \frac{3.5m/s}{0.0285s} = 122.8m/s^2.
@@ -143,7 +143,7 @@ The torque needed to move the tubes is
     \label{eq:torque}
     \tau = F \cdot r = m \cdot a \cdot r = 0.1kg \cdot 122.8m/s^2 \cdot 0.083m \approx 1Nm
 \end{equation}
-assuming the radius $r_g$ of the gear is 8.3cm and the required top rotational speed (measured in rotations per minute $\text{RPM}$) is
+assuming the radius $r_g$ of the gear is 8.3cm and the required top rotational speed (measured in rotations per minute (RPM)) is
 \begin{equation}
     \label{eq:top_rpm}
     \frac{v}{2\pi r_g} \cdot 60s/min = \frac{7m/s}{2\pi \cdot 0.083m} \cdot 60s/min \approx 800\text{RPM}.
@@ -193,7 +193,7 @@ The time to make one full rotation with the given speed of $v_{max}=7m/s$ is
 The maximum speed can easily be calculated with
 \begin{equation}
     \label{eq:max_speed}
-    \omega = \frac{60s/min}{t_{rot}} = \frac{60s/min}{0.6s/rotation} = 1000\text{RPM}
+    \omega = \frac{60s/min}{t_{rot}} = \frac{60s/min}{0.06s/rotation} = 1000\text{RPM}
 \end{equation}
 %\todo{Compute the torque needed to accelerate the ball}
 To calculate the torque needed to accelerate the ball, I need to know the time it takes to accelerate the ball to full speed.
@@ -222,7 +222,7 @@ Together with the mass $m_{ball}$ of the ball, the torque needed to accelerate t
 Together with the length $l$ from equation~\ref{eq:arc-length}, the torque needed to accelerate the ball can be calculated.
 \begin{equation}
     \label{eq:torque_shoot_substituted}
-    \tau = r_p \cdot m_{ball} \cdot \frac{v_{max}^2}{\cdot\frac{\pi}{4}\cdot r_p} = 2m_{ball} \cdot \frac{v_{max}^2}{\pi} \approx 0.5Nm
+    \tau = r_p \cdot m_{ball} \cdot \frac{v_{max}^2}{2\cdot\frac{\pi}{4}\cdot r_p} = 2m_{ball} \cdot \frac{v_{max}^2}{\pi} \approx 0.5Nm
 \end{equation}
 
 
@@ -235,30 +235,30 @@ Including the moment of inertia the equation is a little bit different:
 The torque is defined as
 \begin{equation}
     \label{eq:torque2}
-    \tau = I \frac{d\vec{\omega}}{dt},
+    \tau = I \frac{d\omega}{dt},
 \end{equation}
 where $I$ is the moment of inertia and $\omega$ is the angular velocity.
 The angular velocity $\omega$ depends linearly on time $t$:
 \begin{equation}
     \label{eq:angular_velocity}
-    \omega = a_\omega \cdot t
+    \omega(t) = a_\omega \cdot t
 \end{equation}
 where $a_\omega$ is the angular acceleration.
-Integrating this formula yields for the angle $\theta$:
+Integrating this formula yields a function $\theta(t)$ for the angle $\theta$:
 \begin{equation}
     \label{eq:angle}
-    \theta(t) = \int omega(t)dt = \int a_\omega \cdot t dt = \frac{1}{2} a_\omega t^2
+    \theta(t) = \int \omega(t)dt = \int a_\omega \cdot t dt = \frac{1}{2} a_\omega t^2
 \end{equation}
-Knowing that, at time $t_e$, the player has rotated by $45\deg = \frac{\pi}{4}$.
-Substituting $t_e$ into the equation~\ref{eq:angle} and solve for $t_e$:
+At time $t_e$, the player has rotated by $45\deg = \frac{\pi}{4}$.
+Substituting $t_e$ into the equation~\ref{eq:angle} and solving for $t_e$:
 \begin{equation}
     \label{eq:time_to_rotate}
-    \frac{1}{2} a_\omega t_e^2 = \frac{\pi}{4} \Rightarrow t_e = \sqrt{\frac{\pi}{2a_\omega}}
+   \theta(t_e)= \frac{1}{2} a_\omega t_e^2 = \frac{\pi}{4} \Rightarrow t_e = \sqrt{\frac{\pi}{2a_\omega}}
 \end{equation}
-Substituting $t_e$ into the equation~\ref{eq:angular_velocity} gives an equation for the angular acceleration, which can be solved for the angular accleration $a_\omega$:
+Substituting $t_e$ into the equation~\ref{eq:angular_velocity} and knowing that the player has an angular velocity $\omega_e=\frac{2\pi}{t_{rot}}$, gives an equation for the angular acceleration, which can be solved for the angular acceleration $a_\omega$:
 \begin{equation}
     \label{eq:angular_acceleration}
-    \omega(t_e) = \frac{2\pi}{t_{rot}} \Rightarrow a_{\omega} \cdot \sqrt {\frac{\pi}{2a_{\omega}}} = \frac{2\pi}{t_{rot}} \Rightarrow a_{\omega} = \frac{8\pi}{t_{rot}^2}
+    \omega(t_e) = \omega_e = \frac{2\pi}{t_{rot}} \Rightarrow a_{\omega} \cdot \sqrt {\frac{\pi}{2a_{\omega}}} = \frac{2\pi}{t_{rot}} \Rightarrow a_{\omega} = \frac{8\pi}{t_{rot}^2}
 \end{equation}
 Therefore the function $\omega(t)$ is:
 \begin{equation}
@@ -268,7 +268,7 @@ Therefore the function $\omega(t)$ is:
 And the required torque $\tau$ is:
 \begin{equation}
     \label{eq:torque3}
-    \tau = I \frac{d\vec{\omega}}{dt} = I \frac{8\pi}{t_{rot}^2}
+    \tau = I_s \frac{d\vec{\omega}}{dt} = I \frac{8\pi}{t_{rot}^2}
 \end{equation}
 I approximate the player with a tube and the axis going through it at the distance $s=\frac{l}{6}$ from the center axis.
 The moment of inertia of a tube is:
@@ -308,7 +308,7 @@ The calculations to determine the actual $v_{max}$ are left as an exercise to th
 \section{Camera}\label{sec:camera}
 
 \subsection{Optics}\label{subsec:lens}
-To achieve my goal of defending against balls at speed of up to $7m/s$, I need a camera that can capture the entire table at a framerate of at least 200fps.
+To achieve my goal of defending against balls at speed of up to $7m/s$, I need a camera that can capture the entire table at a framerate of at least 150fps.
 I record the table from the bottom to avoid seeing the players and the rods instead of the ball; therefore, I have to replace the floor of the table with a glass plate.
 A sensor that achieves this is the \textbf{IMX287 CMOS} sensor from \textbf{Sony}.
 This sensor has a width of $w=4.98\text{mm}$.
