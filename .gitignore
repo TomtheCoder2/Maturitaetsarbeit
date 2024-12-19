@@ -2,3 +2,4 @@
 documentation/out/
 /documentation/output/**
 /arduino_code/target/
+/code/Cargo.lock
