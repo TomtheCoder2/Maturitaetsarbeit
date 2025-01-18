@@ -1,4 +1,4 @@
-use matura::ball::{standard_selection, SelectionFn};
+use matura::ball::standard_selection;
 use matura::compute_rl_coords::RLCompute;
 use std::f32::consts::PI;
 use std::sync::atomic::AtomicBool;
@@ -35,8 +35,17 @@ pub enum Command {
     FinishPlayerCalibration(Vec<i32>),
     Shoot,
     ResetDC,
-    SelectionFn { selection_type: Selection, r: u8, g: u8, b: u8, sum: i32 },
-    Radius { min_radius: f32, max_radius: f32 },
+    SelectionFn {
+        selection_type: Selection,
+        r: u8,
+        g: u8,
+        b: u8,
+        sum: i32,
+    },
+    Radius {
+        min_radius: f32,
+        max_radius: f32,
+    },
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum Selection {
@@ -774,8 +783,21 @@ impl App {
         PAUSEPLAYER.store(app.pause_player, Ordering::Relaxed);
         FOLLOWBALL.store(app.followball, Ordering::Relaxed);
         PAUSESHOOTING.store(app.pause_shooting, Ordering::Relaxed);
-        app.sender.send(Command::Radius { min_radius: app.min_radius, max_radius: app.max_radius }).unwrap();
-        app.sender.send(Command::SelectionFn { selection_type: app.selection, r: app.r, g: app.g, b: app.b, sum: app.sum }).unwrap();
+        app.sender
+            .send(Command::Radius {
+                min_radius: app.min_radius,
+                max_radius: app.max_radius,
+            })
+            .unwrap();
+        app.sender
+            .send(Command::SelectionFn {
+                selection_type: app.selection,
+                r: app.r,
+                g: app.g,
+                b: app.b,
+                sum: app.sum,
+            })
+            .unwrap();
         if app.paused {
             app.sender.send(Command::Pause).unwrap();
         } else {
@@ -788,11 +810,11 @@ impl App {
 pub fn run_camera_test(tx: Sender<Command>) {
     println!("Starting Camera Test GUI");
     eframe::run_native(
-        "Camera Test",
+        "Live Feed",
         Default::default(),
         Box::new(|cc| Box::new(App::new(tx, cc))),
     )
-        .expect("Failed to run Camera Test");
+    .expect("Failed to run Camera Test");
 }
 
 fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String) {
@@ -1002,22 +1024,25 @@ fn main() {
             // println!("y: {y}, min: {MIN_PIXEL}, max: {MAX_PIXEL}");
             if y > MIN_PIXEL as f32
                 && y < MAX_PIXEL as f32
-                && last_command.elapsed().as_secs_f32() > 0.05
+                && last_command.elapsed().as_secs_f32() > 0.15
             {
                 // convert from pixel y to motor
-                let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
-                let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
-                let x = m * y + b;
+                // let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
+                // let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
+                // let x = m * y + b;
 
                 // new formula to convert from pixel y to motor
                 // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
                 let y = y as f64;
                 // cnc shield:
-                let x = -0.0001175755 * y.powi(3) + 0.1068288075 * y.powi(2) + -34.9042821907 * y.powi(1) + 4210.5343522322;
-                // let x = -0.0003153365 * y.powi(3) + 0.2624616912 * y.powi(2) + -74.9096805158 * y.powi(1) + 7490.9752949853;
-                let x = x as i32;
+                // let x = -0.0000290357 * y.powi(3) + 0.0254211269 * y.powi(2) + -9.9442296735 * y.powi(1) + 1665.2808047191;
+                // rs485 shield:
+                let x = 0.0000934593 * y.powi(3)
+                    + -0.0851183453 * y.powi(2)
+                    + 22.9138846564 * y.powi(1)
+                    + -1556.2043785734;
                 // println!("y: {y}, x: {x}");
-
+                let x = x as i32;
                 // println!("sending: y: {x}");
                 let paused_player = PAUSEPLAYER.load(Ordering::Relaxed);
                 if !paused_player {
@@ -1039,7 +1064,16 @@ fn main() {
                     // println!("Moving to center");
                     // arduino_com.send_string(&format!("{}", 212 as i32));
                     arduino_com.send_string(&"check 10".to_string());
-                    move_y(0., y, arduino_com, last_command, &RLCompute::new(), player_0, &mut 0, paused_player);
+                    move_y(
+                        0.,
+                        y,
+                        arduino_com,
+                        last_command,
+                        &RLCompute::new(),
+                        player_0,
+                        &mut 0,
+                        paused_player,
+                    );
                     *last_command = Instant::now();
                 }
             }
@@ -1150,7 +1184,13 @@ fn main() {
                         );
                         player_calibration_positions.clear();
                     }
-                    Command::SelectionFn { selection_type, r, g, b, sum } => {
+                    Command::SelectionFn {
+                        selection_type,
+                        r,
+                        g,
+                        b,
+                        sum,
+                    } => {
                         selection_fn = match selection_type {
                             Selection::Separation => {
                                 // inputs for r g b
@@ -1159,9 +1199,7 @@ fn main() {
                                 let b = b;
 
                                 // Create a closure with `'static` lifetime
-                                Box::new(move |r_in, g_in, b_in| {
-                                    r_in > r && g_in > g && b_in > b
-                                })
+                                Box::new(move |r_in, g_in, b_in| r_in > r && g_in > g && b_in > b)
                             }
                             Selection::Addition => {
                                 // Create a closure with `'static` lifetime
@@ -1171,7 +1209,10 @@ fn main() {
                             }
                         };
                     }
-                    Radius { min_radius: min, max_radius: max } => {
+                    Radius {
+                        min_radius: min,
+                        max_radius: max,
+                    } => {
                         min_radius = min;
                         max_radius = max;
                     }
@@ -1311,10 +1352,12 @@ fn main() {
                                     &mut player_target,
                                     pause_player,
                                 );
+
+                                time_since_catch = Instant::now();
+                                moved_to_center = false;
                             }
-                            time_since_catch = Instant::now();
-                            moved_to_center = false;
-                        } else if time_since_catch.elapsed().as_secs_f32() > 0.2 && !moved_to_center {
+                        } else if time_since_catch.elapsed().as_secs_f32() > 0.2 && !moved_to_center
+                        {
                             if !FOLLOWBALL.load(Ordering::Relaxed) {
                                 move_center(
                                     &mut arduino_com,
@@ -1327,14 +1370,22 @@ fn main() {
                         }
                     } else if time_since_catch.elapsed().as_secs_f32() > 0.2 && !moved_to_center {
                         if !FOLLOWBALL.load(Ordering::Relaxed) {
-                            move_center(&mut arduino_com, &mut last_command, player_0, pause_player);
+                            move_center(
+                                &mut arduino_com,
+                                &mut last_command,
+                                player_0,
+                                pause_player,
+                            );
                         }
                         moved_to_center = true;
                     }
 
                     // shoot
-                    if !shot && t0.elapsed().as_secs_f32() > shoot_time && !PAUSESHOOTING.load(Ordering::Relaxed)
-                        && !PAUSEPLAYER.load(Ordering::Relaxed) {
+                    if !shot
+                        && t0.elapsed().as_secs_f32() > shoot_time
+                        && !PAUSESHOOTING.load(Ordering::Relaxed)
+                        && !PAUSEPLAYER.load(Ordering::Relaxed)
+                    {
                         arduino_com.send_string("S");
                         // println!("Shot!");
                         shot = true;
@@ -1346,9 +1397,9 @@ fn main() {
                         && last_command.elapsed().as_secs_f32() > 0.05
                     {
                         // convert from pixel y to motor
-                        let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
-                        let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
-                        let x = m * y + b;
+                        // let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
+                        // let b = MAX_MOTOR as f32 - m * MIN_PIXEL as f32;
+                        // let x = m * y + b;
                         // println!("sending: y: {y}");
                         // arduino_com.send_string(&format!("{}", x as i32));
                         // last_command = Instant::now();
