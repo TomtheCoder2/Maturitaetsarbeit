@@ -2,7 +2,7 @@ use image::io::Reader as ImageReader;
 use image::Pixel;
 use image::{DynamicImage, GenericImage, RgbImage};
 use image::{GenericImageView, ImageBuffer, Rgb, Rgba};
-use nalgebra::Vector2;
+use nalgebra::{clamp, Vector2};
 use std::fmt::{Display, Formatter};
 
 pub struct Ball {
@@ -22,7 +22,7 @@ macro_rules! debug {
 
 pub type SelectionFn = dyn Fn(u8, u8, u8) -> bool;
 
-pub fn standard_selection(r:u8, g:u8, b:u8) -> bool {
+pub fn standard_selection(r: u8, g: u8, b: u8) -> bool {
     (r as i32 + g as i32 + b as i32) > 3 * 30
 }
 
@@ -272,7 +272,8 @@ pub fn find_ball(
     ball_comp: &mut BallComp,
     time: f32,
     selection_fn: &dyn Fn(u8, u8, u8) -> bool,
-    min_radius: f32, max_radius: f32
+    min_radius: f32,
+    max_radius: f32,
 ) -> (i32, i32, f32) {
     const SCALING: u32 = 1;
     #[derive(Debug)]
@@ -454,7 +455,8 @@ pub fn read_image_vis(
     time: f32,
     selection_fn: &SelectionFn,
     min_radius: f32,
-    max_radius: f32
+    max_radius: f32,
+    overlay_ball_prediction: bool,
 ) -> (i32, i32, f32) {
     // convert to u8 rgb vector
     let pixels = input.to_rgb8().into_raw();
@@ -463,7 +465,16 @@ pub fn read_image_vis(
         output.width() as usize * output.height() as usize * 3
     );
 
-    let ball = find_ball(&pixels, output.width(), output.height(), ball_comp, time, selection_fn, min_radius, max_radius);
+    let ball = find_ball(
+        &pixels,
+        output.width(),
+        output.height(),
+        ball_comp,
+        time,
+        selection_fn,
+        min_radius,
+        max_radius,
+    );
     // println!("ball: {:?}", ball);
     if ball.0 == -1 {
         return ball;
@@ -478,26 +489,55 @@ pub fn read_image_vis(
             continue;
         }
         output.put_pixel(i, y * SCALING, Rgba([255, 0, 0, 255]));
+        output.put_pixel(
+            i,
+            clamp(y as i32 * SCALING as i32 + 1, 0, output.height() as i32 - 1) as u32,
+            Rgba([255, 0, 0, 255]),
+        );
+        output.put_pixel(
+            i,
+            clamp(y as i32 * SCALING as i32 - 1, 0, output.height() as i32 - 1) as u32,
+            Rgba([255, 0, 0, 255]),
+        );
     }
     for i in 0..output.height() {
         if (i as i32 - (y * SCALING) as i32).abs() < (radius * SCALING as f32) as i32 * 3 {
             continue;
         }
         output.put_pixel(x * SCALING, i, Rgba([255, 0, 0, 255]));
+        output.put_pixel(
+            clamp(x as i32 * SCALING as i32 + 1, 0, output.width() as i32 - 1) as u32,
+            i,
+            Rgba([255, 0, 0, 255]),
+        );
+        output.put_pixel(
+            clamp(x as i32 * SCALING as i32 - 1, 0, output.width() as i32 - 1) as u32,
+            i,
+            Rgba([255, 0, 0, 255]),
+        );
     }
     draw_circle(output, x, y, radius, [255, 0, 0, 0]);
+    draw_circle(output, x, y, radius + 1., [255, 0, 0, 0]);
 
     // println!("Ball at 1086: {:?}, 134", ball_comp.intersection_x(1086.));
-    if let Some(mid_point) = ball_comp.intersection_x(44.) {
-        let mid_point = mid_point.0;
-        let x = mid_point.x as u32;
-        let y = mid_point.y as u32;
-        draw_circle(output, x, y, radius, [255, 255, 0, 0]);
+    if let Some(mid_point) = ball_comp.intersection_x(44.0) {
+        if ball_comp.velocity.x < 0. {
+            let mid_point = mid_point.0;
+            let x = mid_point.x as u32;
+            let y = mid_point.y as u32;
+            if overlay_ball_prediction && ball_comp.velocity.magnitude() > 10. {
+                draw_circle(output, x, y, radius, [255, 255, 0, 0]);
+                draw_circle(output, x, y, radius + 1., [255, 255, 0, 0]);
+            }
+            // draw_circle(output, x, y, radius, [255, 255, 0, 0]);}
+        }
     }
     for ball in &ball_comp.positions {
         let x = ball.0.x as u32;
         let y = ball.0.y as u32;
-        draw_circle(output, x, y, radius, [0, 255, 0, 0]);
+        if overlay_ball_prediction && ball_comp.velocity.magnitude() > 10. {
+            draw_circle(output, x, y, radius, [0, 255, 0, 0]);
+        }
     }
     // draw a line from the ball to the edge with  ball_comp.velocity
     let max_iter = 1000;
@@ -509,19 +549,31 @@ pub fn read_image_vis(
     //     "m: {}, vel: {}, {}",
     //     m, ball_comp.velocity.x, ball_comp.velocity.y
     // );
-    let add: i32 = if ball_comp.velocity.x > 0. { 1 } else { -1 };
-    while (x > 0 && x < output.width() as i32) && iter < max_iter {
-        x += add;
-        if x < 0 {
-            continue;
+    if overlay_ball_prediction && ball_comp.velocity.magnitude() > 10. {
+        let add: i32 = if ball_comp.velocity.x > 0. { 1 } else { -1 };
+        while (x > 0 && x < output.width() as i32) && iter < max_iter {
+            x += add;
+            if x < 0 {
+                continue;
+            }
+            let line_y = (y as f32 + m * (x - start_x as i32) as f32) as u32;
+            iter += 1;
+            if x > output.width() as i32 - 1 || line_y > output.height() - 1 {
+                continue;
+            }
+            // println!("putting pixel at ({},{})", x, y);
+            output.put_pixel(x as u32, line_y, Rgba([255, 0, 255, 0]));
+            output.put_pixel(
+                x as u32,
+                clamp(line_y as i32 + 1, 0, output.height() as i32 - 1) as u32,
+                Rgba([255, 0, 255, 0]),
+            );
+            output.put_pixel(
+                x as u32,
+                clamp(line_y as i32 - 1, 0, output.height() as i32 - 1) as u32,
+                Rgba([255, 0, 255, 0]),
+            );
         }
-        let line_y = (y as f32 + m * (x - start_x as i32) as f32) as u32;
-        iter += 1;
-        if x > output.width() as i32 - 1 || line_y > output.height() - 1 {
-            continue;
-        }
-        // println!("putting pixel at ({},{})", x, y);
-        output.put_pixel(x as u32, line_y, Rgba([255, 0, 255, 0]));
     }
     ball
 }

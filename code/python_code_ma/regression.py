@@ -8,7 +8,30 @@ import numpy as np
 # positions = [[0, 357], [50, 340], [100, 317], [150, 303], [200, 282], [250, 269], [300, 246]] # good data for doc (rs485)
 # positions = [[1, 361], [47, 348], [96, 330], [144, 315], [211, 289], [254, 270], [303, 257]]
 # positions = [[210, 283], [50, 345], [100, 325], [150, 305], [200, 286], [250, 269], [300, 250]]
-positions = [[262, 245], [50, 323], [100, 310], [150, 289], [200, 266], [250, 245], [300, 232]]
+# positions = [[262, 245], [50, 323], [100, 310], [150, 289], [200, 266], [250, 245], [300, 232]]
+# positions = [[261, 268], [58, 349], [95, 334], [158, 312], [212, 289], [249, 277], [298, 257]]
+# positions = [[0, 361], [50, 342], [100, 322], [150, 305], [200, 289], [250, 268], [300, 251]]
+
+# motor pos, ir
+# 0, 349
+# 330, 442
+# 300, 435
+# 250, 415
+# 200, 398
+# 150, 385
+# 100, 369,
+# 50, 357,
+# 0, 351
+# positions = [[0, 349], [50, 357], [100, 369], [150, 385], [200, 398], [250, 415], [300, 435], [330, 442], [0, 351]]
+# positions = [[0, 288.61], [330, 450]]
+# positions = [[48, 366], [48, 352], [80, 332], [167, 301], [198, 289], [261, 273], [299, 261]]
+# positions = [[6, 369], [53, 345], [95, 329], [140, 316], [212, 289], [266, 267], [293, 261]]
+# positions = [[176, 303], [71, 349], [107, 328], [155, 310], [224, 283], [284, 261], [341, 244]]
+# positions = [[-86, 320], [77, 284], [170, 263], [122, 271], [221, 252], [248, 242], [317, 225]]
+positions = [[6, 345], [29, 328], [105, 298], [162, 277], [207, 265], [268, 249], [301, 235]]
+
+
+
 
 def fit_regression(x, y, degree=3):
     """Fits linear and polynomial regressions."""
@@ -78,11 +101,11 @@ plt.subplots_adjust(top=0.952, bottom=0.078, left=0.046, right=0.99, hspace=0.2,
 
 # Print equations
 print("Original (X vs Y):")
-print(f"  Linear Fit Equation: y = {coeffs_linear[0]:.4f}x + {coeffs_linear[1]:.4f}")
+print(f"  Linear Fit Equation: y = {coeffs_linear[0]:.10f}x + {coeffs_linear[1]:.10f}")
 print(f"  Polynomial Fit Equation (Degree {len(coeffs_poly) - 1}): {format_polynomial(coeffs_poly)}")
 
 print("\nSwapped (Y vs X):")
-print(f"  Linear Fit Equation: x = {coeffs_linear_swapped[0]:.4f}y + {coeffs_linear_swapped[1]:.4f}")
+print(f"  Linear Fit Equation: x = {coeffs_linear_swapped[0]:.10f}y + {coeffs_linear_swapped[1]:.10f}")
 print(f"  Polynomial Fit Equation (Degree {len(coeffs_poly_swapped) - 1}): {format_polynomial10(coeffs_poly_swapped)}")
 print(coeffs_poly_swapped)
 plt.show()

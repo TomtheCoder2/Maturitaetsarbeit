@@ -213,6 +213,9 @@ void loop() {
       return;
     }
     if (input == "S") {
+      if (dc_mode != 0) {
+        return;
+      }
       // shoot
       dc_target = 20;
       dc_mode = 1;

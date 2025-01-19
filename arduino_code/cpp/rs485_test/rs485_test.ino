@@ -6,8 +6,25 @@
 #define RS485_SERIAL Serial2
 
 
+// dc stuff
+int dc_target = 0;
+// modes:
+// 0 - Nothing/default
+// shooting modes: first turn to 25, then -50 and then back to 0
+// 1 - shoot: turning to 25
+// 2 - shoot: turning to -50
+// 3 - not yet defined
+int dc_mode = 0;
+unsigned long start_reset = -100000;
+unsigned long start_shoot = -1000000;
+unsigned long shoot_intervall = 150;
+unsigned long reset_intervall = 300;
+
 const long int max_pos = 20000;
 int pos = 0;
+int ir_target = 0;
+int corrections = 0;
+int reset_counter = 0;
 
 int clamp(long int value, long int min, long int max) {
   return min(max, max(min, value));
@@ -24,6 +41,9 @@ bool isNumber(String inputString) {
   }
   // Check each character to ensure it's a digit
   for (unsigned int i = 0; i < inputString.length(); i++) {
+    if (inputString[i] == '-') {
+      continue;
+    }
     if (!isDigit(inputString[i])) {
       return false;  // Return false if a non-digit character is found
     }
@@ -31,10 +51,27 @@ bool isNumber(String inputString) {
   return true;  // All characters are digits
 }
 
+// ir to pos (0-330)
+int ir_to_pos(int ir_pos) {
+  float ir_pos_f = (float)ir_pos;
+  // Serial.println(ir_pos_f);
+  // Serial.println(a * ir_pos_f);
+  return (int)(2.0447363529 * ir_pos_f + -590.1313588202);
+}
+
+// pos (0-330) to ir
+int pos_to_ir(int pos) {
+  float pos_f = (float)pos;
+  // Serial.println(pos_f);
+  // Serial.println(0283.5737179f * pos_f);
+  return (int)((245.6969697 * pos_f) / 1000.0f + 363.99f);
+}
+
 
 void setup() {
   Serial.begin(57600);
   Serial.println("Begin...");
+  ir_setup();
   // Configure control pins
   pinMode(RE_PIN, OUTPUT);
   pinMode(DE_PIN, OUTPUT);
@@ -45,7 +82,7 @@ void setup() {
 
   // Initialize serial communication
   RS485_SERIAL.begin(9600);  // Adjust baud rate if needed for the motor
-
+  dc_setup();
 
   // Test command to rotate motor right
   // sendCommand(0x01, 0x01, 0x00, 1000); // ROR (Rotate Right) with velocity 1000
@@ -58,18 +95,22 @@ void setup() {
   delay(100);
   sendCommand(0x01, 5, 0x05, 2047);  // abs  acc acc set
   delay(100);
-  sendCommand(0x01, 5, 0x8c, 7);     // microstep res
+  sendCommand(0x01, 5, 0x8c, 7);  // microstep res
   delay(100);
-  sendCommand(0x01, 5, 153, 6);      // ramp divisor
+  sendCommand(0x01, 5, 153, 6);  // ramp divisor
   delay(100);
-  sendCommand(0x01, 5, 154, 3);      // pulse divisor
+  sendCommand(0x01, 5, 154, 3);  // pulse divisor
   delay(100);
   sendCommand(0x01, 6, 208, 0x0);
+  delay(100);
 }
 
 void loop() {
   if (Serial.available()) {
     String input = Serial.readStringUntil('\n');
+    while (Serial.available()) {
+      input = Serial.readStringUntil('\n');
+    }
     if (input == "e") {
       sendCommand(0x01, 5, 0x04, 2047);  // abs  target speed set
       delay(100);
@@ -81,10 +122,45 @@ void loop() {
       sendCommand(0x01, 0x04, 0x00, -input_int);
       return;
     }
+    if (input == "S") {
+      if (dc_mode != 0) {
+        return;
+      }
+      // shoot
+      dc_target = 20;
+      dc_mode = 1;
+      return;
+    }
+    if (input == "reset_dc") {
+      unsigned long int start = millis();
+      while (millis() - start < 2000) {
+        turn(1);
+      }
+      stop();
+      reset_dc_pos();
+      while (!dc_loop(-35)) {
+
+      }
+      reset_dc_pos();
+      Serial.println("Reset dc motor");
+      return;
+    }
     if (input == "I") {
       Serial.print("Pos: ");
-      Serial.println(pos);
+      Serial.println(ir_to_pos(vout()));
       // Serial.println("end");
+      return;
+    }
+    if (input == "ir") {
+      Serial.print("IR: ");
+      // print_vout();
+      Serial.print(vout());
+      Serial.print(" Pos: ");
+      Serial.println(ir_to_pos(vout()));
+      return;
+    }
+    if (input == "vi") {
+      print_vout();
       return;
     }
     if (input == "sync") {
@@ -105,14 +181,93 @@ void loop() {
     }
     if (isNumber(input)) {
       // Serial.println("number!");
-      pos = input.toInt();
-      long long int input_int = clamp(convert(input.toInt()), 0, max_pos);
+      // pos = clamp(input.toInt(), 0, 330);
+      // int ir_pos = pos_to_ir(pos);
+      // ir_target = ir_pos;
+      // Serial.print("Ir Pos: ");
+      // Serial.print(ir_pos);
+      // pos = ir_to_pos(ir_pos);
+      // Serial.print(" Normal Pos: ");
+      // Serial.println(pos);
+
+      // Serial.print("IR Pos: "); Serial.println(current_pos);
+      // pos = 100, current_pos = 120, correction = -20
+      // int correction = pos - current_pos;
+      // int drive_pos = pos + correction;
+      // pos = current_pos;
+      // long long int input_int = clamp(convert(drive_pos), 0, max_pos);
+      reset_counter--;
+      if (reset_counter < 0) {
+        int ir = vout_int();
+        int current_pos = ir_to_pos(ir);
+        sendCommand(0x01, 5, 1, -convert(current_pos));  // set actual position
+        // sendCommand(0x01, 5, 1, -convert(pos));  // set actual position
+        delay(50);
+        reset_counter = 1;
+      }
+      // pos = input.toInt();
+
+      // long long int input_int = clamp(convert(input.toInt()), 0, max_pos);
+      long long int input_int = convert(input.toInt());
       // Serial.print("pos: "); Serial.println((long)input_int);
       sendCommand(0x01, 0x04, 0x00, -input_int);
+      // delay(100);
+      // corrections = 5;
+    }
+  }
+  if (corrections > 0) {
+    int ir = vout();
+    int current_pos = ir_to_pos(ir);
+    // pos = 100, current_pos = 120, correction = -20
+    int correction = (pos - current_pos) * 3 / 5;
+    if (abs(correction) < 50) {
+      int drive_pos = pos + correction;
+      pos = drive_pos;
+      long long int input_int = clamp(convert(drive_pos), 0, max_pos);
+      // Serial.print("pos: ");
+      // Serial.println((long)input_int);
+      // sendCommand(0x01, 0x04, 0x00, -input_int);
+      sendCommand(0x01, 5, 1, -convert(current_pos));  // set actual position
+      delay(10);
+      // Serial.println(correction);
+      corrections--;
     }
   }
 
-  read_output();
+  int dc_pos = get_pos();
+  // if (count_shoot > 1 && dc_pos > -50) {
+  if (millis() - start_shoot < shoot_intervall && dc_pos > -50) {
+    // Serial.print("dc pos:");Serial.println(dc_pos);
+    // count_shoot--;
+    turn(-1);
+    dc_target = 0;
+    dc_mode = 2;
+    // count_reset = 10000;
+    start_reset = millis();
+    // } else if (count_reset > 1) {
+  } else if (millis() - start_reset < reset_intervall) {
+    // Serial.println("resetting");
+    turn(1);
+    dc_mode = 3;
+    dc_target = -35;
+    reset_dc_pos();
+    // count_reset--;
+  } else {
+    if (dc_loop(dc_target)) {
+      if (dc_mode == 1) {
+        // count_shoot = 10000;
+        start_shoot = millis();
+      } else if (dc_mode == 3) {
+        // Serial.println("reseting dc pos");
+        reset_dc_pos();
+        dc_mode = 0;
+        dc_target = 0;
+      }
+    }
+  }
+
+
+  // read_output();
 
 
 

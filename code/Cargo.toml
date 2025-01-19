@@ -25,6 +25,7 @@ eframe = { version = "0.27.1", default-features = false, features = [
 regex = "1.10.6"
 chrono = "0.4.38"
 egui_extras = "0.27.1"
+atomic_float = "1.1.0"
 
 [profile.release]
 debug = 1

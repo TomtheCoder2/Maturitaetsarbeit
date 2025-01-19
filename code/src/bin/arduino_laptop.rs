@@ -1,5 +1,10 @@
 fn main() {
     let mut arduino_com = matura::arduino_com::ArduinoCom::new();
-    arduino_com.send_string("100");
-    // loop {}
+    let mut pos = 100;
+    loop {
+        arduino_com.send_string(&format!("{}", pos % 330));
+        pos += 50;
+        //     sleep 150 ms
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    } // loop {}
 }

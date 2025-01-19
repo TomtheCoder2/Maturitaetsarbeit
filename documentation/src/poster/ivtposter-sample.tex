@@ -1,0 +1,258 @@
+%Adjust the path to the posters/ directory here
+\documentclass[final,a0paper]{ivtposter}
+%\documentclass[final,trb]{ivtposter}
+%\documentclass[a4shrink,portrait,final]{ivtposter}
+% Use a4shrink for an a4 sized paper.
+
+% All files are supposed to be in UTF-8 now:
+% (ENCODING CHECK: äöüÄÖÜßéàè)
+
+% You probably need to change this
+\usepackage[latin]{babel}%
+
+\usepackage{booktabs}
+
+% Enable and fix path for bibliography support
+\iffalse
+\usepackage[round]{natbib}
+\bibliographystyle{_latexfiles/styles/ivt-eng}%
+\fi
+
+%% To use the FF DIN Pro font:
+\iffalse
+\usepackage{fontspec}
+\setmainfont[BoldFont=*-Bold, ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic, Ligatures=TeX, Numbers=OldStyle]{DINPro}
+\usepackage{unicode-math}
+\setmathfont{Asana Math} % for math symbols, can be any other OpenType math font
+\setmathfont[Ligatures=TeX, Numbers={Lining,Proportional}, range=\mathup]  {DINPro}
+\setmathfont[Ligatures=TeX, Numbers={Lining,Proportional}, range=\mathbfup]  {DINPro}
+\setmathfont[Ligatures=TeX, Numbers={Lining,Proportional}, range=\mathbfit]  {DINPro-BoldItalic}
+\setmathfont[Ligatures=TeX, Numbers={Lining,Proportional}, range=\mathit]{DINPro-Italic}
+\fi
+
+\tracingstats=2
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Begin of Document
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Here starts the poster
+%%%---------------------------------------------------------------------------
+%%% Format it to your taste with the options
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\typeout{Poster Starts}
+\begin{poster}%
+  % Poster Options
+  {
+  columns=3, %1-6
+  % Show grid to help with alignment
+  grid=no
+  }
+  % Eye Catcher
+  {} % No eye catcher for this poster. (eyecatcher=no above). If an eye catcher is present, the title is centered between eye-catcher and logo.
+  % Title
+  {~}
+  % Authors
+  {}
+  % University logo
+  {}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% Now define the boxes that make up the poster
+%%%---------------------------------------------------------------------------
+%%% Each box has a name and can be placed absolutely or relatively.
+%%% The only inconvenience is that you can only specify a relative position 
+%%% towards an already declared box. So if you have a box attached to the 
+%%% bottom, one to the top and a third one which should be in between, you 
+%%% have to specify the top and bottom boxes before you specify the middle 
+%%% box.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %
+    % A coloured circle useful as a bullet with an adjustably strong filling
+    \newcommand{\colouredcircle}[1]{%
+      \tikz{\useasboundingbox (-0.2em,-0.32em) rectangle(0.2em,0.32em); \draw[draw=black,fill=baposterBGone!80!black!#1!white,line width=0.03em] (0,0) circle(0.18em);}}
+
+  \headerbox{}{name=title,column=0,row=0,span=3,noheader=yes}{%
+     \begin{flushleft}
+     \setlength{\parskip}{1ex}
+     {\fontsize{34.3}{41.2}\bfseries\selectfont
+       Title goes here, it should be no longer than 2 lines otherwise it is not a title, it is a text
+     \par
+     }
+     \vspace{1ex}
+     {\Large
+       Subtitle that also should not be longer than 2 lines -- subtitle subtitle subtitle subtitle subtitle
+       subtitle subtitle subtitle subtitle subtitle subtitle subtitle subtitle
+     \par
+     }
+     \vspace{2ex}
+     {
+       \Large\bfseries
+       Author one\textsuperscript{1+}\hspace{-.25em},
+       Author two\textsuperscript{2}\hspace{-.25em},
+       Author three\textsuperscript{3}
+     \par
+     }
+     \textsuperscript{1}Institute for Transport Planning and Systems (IVT), ETH Zurich;
+     \textsuperscript{2}Organisational unit 2, University XXX;
+     \textsuperscript{3}Organisational unit 3, University YYY
+     \\
+     \textsuperscript{+}Corresponding author; mailmailmai@server.com, further contact information
+     \end{flushleft}
+  }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \headerbox{1 Introduction}{name=introduction,column=0,below=title}{
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    Senda nonsent ut etum restrum quodis ditatati tem
+    quamet, con et officilique nonsendist ut alitae perum
+    quiation rest quas mo dolessiniet denia vercilibus
+    aut ut quia quaeper fernata spiscia des et eatibus
+    eum sus voluptatur? Is quam venim exerchi cip-
+    idun turessi dolupti voluptas acipsae platini sanita
+    am facestrum qui rest labo. Tem rem aperepta quia
+    que cum, sum quodit esentus, quos alicatqui con-
+    sequi quam eserovi duntiusae explique simus et
+    voluptat arum laboratiist volorrovit, in coratqu iaest,
+    conserfernat que pratem. Sollantum ium qui simo
+    doluptur, consedist aut lique mod eveles adignime
+    comnimus maxim ut explab incientem haruptae ip-
+    samusant offic to bero comnihit exceatiantur sinus
+    eos aruptat incilit qui alignis aut fugiaturi as aut eum
+    eturestent es num cullent pelenis andae veriorp or-
+    est, a dem harum dolupis et, volupta tioraer spiene
+    re experupta coria commolore sin coreseq uiassed
+    quas illitis dolore maximpe ruptatur? Nonet
+  }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \headerbox{2 Literature}{name=literature,column=0,below=introduction,above=bottom}{
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    Dellatio consequist, optatin prae la porae. Et et,
+    verovid mossit est ute int, iliqui conecto tatibus
+    dolorio. Nam eicia cusapis cipsam aceatinvel ium
+    resenim usandae ommossunt aut que vellicto tet
+    iuntinum es est, quidus quamus estiis utem. Otate
+    sae. Ur minciist ant.
+
+    Ventiae. Ut as denihillaut occae cullandam rem.
+    Nem re ius am excepro beaquatur, coriatempore
+    conse dolo tor repe sit entore od que pro bea volum
+    quo core rem sunt volupti rem adi deni saepedi or-
+    rorpo repratur sim samus.
+
+    \createtable{}{Title}{X}{%
+      \begin{tabular}{rl}
+        \toprule
+        Column 1 & Column 2 \\\midrule
+        INSERT YOUR & TABLE HERE \\
+        INSERT YOUR & TABLE HERE \\
+        INSERT YOUR & TABLE HERE \\
+        INSERT YOUR & TABLE HERE \\
+        INSERT YOUR & TABLE HERE \\
+        INSERT YOUR & TABLE HERE \\
+        INSERT YOUR & TABLE HERE \\
+        \bottomrule
+      \end{tabular}
+    }{}
+    
+    Rorrovitio elesequi optatus atiam et occusci psanderum vidus elibus autem faccabo. Nemporios est
+    denimin nus, sunt fuga. Itat.
+
+    Excerum hitataquam eos nest ressim que volupti
+    reptate culparciume con recerae. Nem quid ent fugiam facidunt lam ea dolent.
+
+    Harum fuga. Sed ea porrum quis dolutat.
+
+    Beat aperrores qui andusam quasperem repelen-
+    tiis molore officietur, odigend ellaccuptia sequibus
+    magnis doluptat officiae. Itatiundae ea quidusapi-
+    cit militi asi quo offictur? Qui verum fuga. Bo. Oc-
+    cullandae pore perferumquam ea placepr ehendus
+    nossim velliam, etusdant arissi ut quam fuga. Itat
+  }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \headerbox{6 References}{name=references,column=1,span=2,above=bottom}{
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \scriptsize\setlength{\parskip}{0ex}
+    1.	 This is a dummy text. Far far away, behind the word mountains, far from the countries Vokalia and Consonantia, there live the blind texts. \\
+    2.	 Separated they live in Bookmarksgrove right at the coast of the Semantics, a large language ocean. \\
+    3.	 A small river named Duden flows by their place and supplies it with the necessary regelialia. \\
+    17.	 It is a paradisematic country, in which roasted parts of sentences fly into your mouth. \\
+    29.	 This is a dummy text. Far far away, behind the word mountains, far from the countries Vokalia and Consonantia, there live the blind texts. \\
+    55.	 Separated they live in Bookmarksgrove right at the coast of the Semantics, a large language ocean. \\
+    109.	A small river named Duden flows by their place and supplies it with the necessary regelialia \par
+  }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \headerbox{4 Results}{name=results,column=1,above=references}{
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    Ab iunt, sus doloremqui imus, coremol uptaque
+    quaero te simet dignis et mo volore, occus eum
+    quisserum sundant quo comnis ilit offictiores re
+    pore, sumqui odis alita culparum as dem. Itaessit
+    laut utatur?
+
+    Uciatem velibus modigen tumquiat as as eossimus
+    aut offici as es rae sequamet eossim abo. Officaborem quistia vendus, tecum ex exped eumquatibus.
+
+    Ut eum nobitatin pration sequam fugit dolut audiae. Ercid quaepudis si apis vollecab ilignihillam faci
+    dest, corpore mosam, senihitibus es ea commole
+    nimporepero expellent ommo modit ipit aut es es
+    samus, omnisci enieni aut ut excerspe voleces nonsed quos voluptatus dollacesto blacia quate aped
+    qui dolor as dolorumquo veliqui ra cum dercien
+    iendit quosam, commolores ad eostiatis deres aut
+    abo. Tur? Et lignis quid utem ea simillatur sit mol
+  }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \headerbox{5 Conclusion}{name=conclusion,column=2,aligned=results,bottomaligned=results}{
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    Caborpori cor magnat ut quid quia quiae minciaestrum nam rehendicae plicipis quam alit occatibus.
+    
+    Itat fuga. Nam que estint qui nulparum qui consequi doluptaepra doluptatur, et aliandis demquid est,
+    eaquibusant ipistrum alignistis ea dusam volorruptaes eictate nonseque sit accus mod es duciis estia
+    estio. Nequi inctatiberum consed quo toraepudis
+    solorro moloris dolupta temperovit prae cum atem
+    facepudae nullacerit exerore henisquo diaspedis
+    magnihit minus, sus es voluptas ad mod magnis
+    eiurion estotat emodit, que cum repuditaquos repeditas am atus molore volectus.
+    
+    Ebistiis sit, tem ius ex eos evenissincto eos adicatur
+    accum ut volecesti conempore quo diatur sim qui
+    ipiendae. Occumquias dollacc uptaqua eriam, untetus damusam sum aut in nus aboressi quia dolo
+    quo elitiis nimincta coremperi vellupi taspersperae
+  }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  \headerbox{3 Methods}{name=conclusion,column=1,span=2,below=title,above=results}{
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    \paragraph{Inner title (if necessary)}
+    Sum earionsequo blam is excearum nonet atqui offictur a doluptatiat doluptates moloribus endaeperum est acid
+    que conseru ntectio. Itaqui omnis eum fugianietur rem abo. Nem reptate mporept ibusape rionseque excestio.
+    Et plit occullu ptaque consedi tibusam re occus dolorem invendi pictatur?
+
+    Taestrum quodipsum labo. Fici officto repersp elecatet poreces senda solorrum fuga. Haruntinus et audi que
+    repra parum hic to magnam aut ea eicius et ut faces et es adici omnis excepel lecernatem liate pre et magnima
+    dolupta tiatem volupta tiberae ceperch itatur ma volupta cus placearciis doluptatur, simus el in comni digent
+
+    \createfigure{}{Title}{X}{%
+    \includegraphics[height=21ex]{netz}
+    }{}
+    excepernate ellessit exces veles doluta que nusdae non et quunt aliquiamus estrum doluptae. Rovid quasit
+    aute rerspit hitatius modit quibus aut faccus, nos qui consequam quiste consequia destium volenim odiorehent
+    moloresed maximolore re
+
+    ~
+
+    \paragraph{Inner title (if necessary)}
+    officiae sendis aut que aut et volentu stotatur, num ipit ex eos ad mincti vit, quidebis ma nis expel eaquas alitibus arios sitas maximi, omniendae suntem et rem alignatibus est, con nectati que asperumet quae.
+  }
+
+\end{poster}
+
+\end{document}

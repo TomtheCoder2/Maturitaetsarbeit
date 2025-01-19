@@ -11,12 +11,13 @@ use std::time::Instant;
 use cameleon::u3v::{ControlHandle, StreamHandle};
 use cameleon::Camera;
 use eframe::Frame;
-use egui::Context;
+use egui::{Color32, Context};
 use egui::{ColorImage, TextureHandle};
 use matura::arduino_com::ArduinoCom;
 use matura::ball::BallComp;
 use matura::increment_last_number_in_filename;
 use std::sync::atomic::Ordering;
+use atomic_float::AtomicF32;
 
 use crate::Command::*;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer};
@@ -46,6 +47,10 @@ pub enum Command {
         min_radius: f32,
         max_radius: f32,
     },
+    BallPixel {
+        min_pixel: i32,
+        max_pixel: i32,
+    },
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum Selection {
@@ -68,6 +73,7 @@ pub struct App {
     exposure: f64,
     auto_exposure: bool,
     calibration_mode: bool,
+    brightness: f64,
     #[serde(skip)]
     last_cal_image: Instant,
     calibration_interval: f64,
@@ -79,6 +85,7 @@ pub struct App {
     #[serde(skip)]
     raw_image: ColorImage,
     show_original: bool,
+    show_undistorted: bool,
     overlay_raw_img: bool,
     #[serde(skip)]
     ball_comp: BallComp,
@@ -93,7 +100,9 @@ pub struct App {
     #[serde(skip)]
     last_frame: Instant,
     overlay_ball: bool,
+    overlay_ball_prediction: bool,
     show_player_predicition: bool,
+    show_min_max_pixel: bool,
     pause_player: bool,
     pause_shooting: bool,
     #[serde(skip)]
@@ -115,8 +124,12 @@ pub struct App {
     #[serde(skip)]
     selection_fn: Box<dyn Fn(u8, u8, u8) -> bool>,
     show_selection: bool,
+    // maybe convert to atomice
     min_radius: f32,
     max_radius: f32,
+    min_pixel: i32,
+    max_pixel: i32,
+    timing_offset: f32,
 }
 
 const POS: [i32; 7] = [50, 100, 150, 200, 250, 300, 350];
@@ -130,6 +143,7 @@ impl Default for App {
             exposure: 0.0,
             auto_exposure: true,
             calibration_mode: false,
+            brightness: 1.0,
             last_cal_image: Instant::now(),
             calibration_interval: 0.5,
             paused: false,
@@ -138,6 +152,7 @@ impl Default for App {
             // read the image from ./raw.png
             raw_image: load_raw(),
             show_original: false,
+            show_undistorted: true,
             overlay_raw_img: false,
             ball_comp: BallComp::default(),
             start_time: Instant::now(),
@@ -147,7 +162,9 @@ impl Default for App {
             motor_pos: 0,
             last_frame: Instant::now(),
             overlay_ball: true,
+            overlay_ball_prediction: true,
             show_player_predicition: true,
+            show_min_max_pixel: false,
             pause_player: false,
             pause_shooting: false,
             click_position: None,
@@ -166,6 +183,9 @@ impl Default for App {
             show_selection: false,
             min_radius: 10.,
             max_radius: 20.,
+            min_pixel: 226,
+            max_pixel: 350,
+            timing_offset: 0.25,
         }
     }
 }
@@ -289,7 +309,7 @@ impl eframe::App for App {
             }
 
             let time = Instant::now().duration_since(self.start_time).as_secs_f32();
-            let ball = matura::ball::read_image_vis(&mut subtracted_image, &mut original_undistorted_image, &mut self.ball_comp, time, &self.selection_fn, self.min_radius, self.max_radius);
+            let ball = matura::ball::read_image_vis(&mut subtracted_image, &mut original_undistorted_image, &mut self.ball_comp, time, &self.selection_fn, self.min_radius, self.max_radius, self.overlay_ball_prediction);
             // println!("ball: {:?}", ball);
             // if !self.overlay_raw_img {
             if self.overlay_ball {
@@ -396,6 +416,12 @@ impl eframe::App for App {
                 }
             }
 
+            for pixel in image.as_mut_rgb8().unwrap().pixels_mut() {
+                pixel.0[0] = (pixel.0[0] as f64 * self.brightness).min(255.0) as u8;
+                pixel.0[1] = (pixel.0[1] as f64 * self.brightness).min(255.0) as u8;
+                pixel.0[2] = (pixel.0[2] as f64 * self.brightness).min(255.0) as u8;
+            }
+
             if self.show_selection {
                 match self.selection {
                     Selection::Separation => {
@@ -439,24 +465,20 @@ impl eframe::App for App {
                 }
             }
 
+            let min_pixel_color = Color32::from_rgb(255, 165, 0);
+            let max_pixel_color = Color32::from_rgb(0, 255, 0);
+            // if show min max pixel, draw a line in the color min_pixeL_color at y = min_pixel and max_pixel with max_pixel_color
+            if self.show_min_max_pixel {
+                for x in 0..image.width() {
+                    image.put_pixel(x, self.min_pixel as u32, image::Rgba(min_pixel_color.to_array()));
+                    image.put_pixel(x, self.max_pixel as u32, image::Rgba(max_pixel_color.to_array()));
+                }
+            }
+
             let ci_image = ColorImage::from_rgb(
                 [image.width() as usize, image.height() as usize],
                 image.as_bytes(),
             );
-            let undistorted_texture = load_texture_from_image(ctx, ci_image.clone());
-            let original_texture = load_texture_from_image(
-                ctx,
-                ColorImage::from_rgb(
-                    [
-                        original_image.width() as usize,
-                        original_image.height() as usize,
-                    ],
-                    original_image.as_bytes(),
-                ),
-            );
-            if self.recording {
-                self.recorded_images.push(ci_image.clone());
-            }
 
             if self.auto_exposure {
                 // caluclate average brightness
@@ -510,7 +532,7 @@ impl eframe::App for App {
                     > self.calibration_interval)
                 {
                     save_img(image.clone(), self.file_name.clone());
-                    save_img(original_image, self.file_name.clone() + "_raw");
+                    save_img(original_image.clone(), self.file_name.clone() + "_raw");
                     if self.calibration_mode {
                         self.file_name = increment_last_number_in_filename(&self.file_name)
                             .expect("Could not increment last number in filename");
@@ -524,144 +546,6 @@ impl eframe::App for App {
                 }
                 // ui.label("Speed:");
                 // ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
-                if ui.button("Reset").clicked() {
-                    // self.arduino_com.send_command(com::commands::Command::Reset(0));
-                    // self.arduino_com.send_string("R");
-                    self.sender.send(Reset).unwrap();
-                }
-                if ui.button("Reset DC").clicked() {
-                    self.sender.send(Command::ResetDC).unwrap();
-                }
-                if ui.button("Move to center").clicked() {
-                    self.sender.send(Command::MoveCenter).unwrap();
-                }
-                if ui.button("Shoot").clicked() {
-                    self.sender.send(Command::Shoot).unwrap();
-                }
-                if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
-                    println!("Pause player movement: {}", self.pause_player);
-                    PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
-                    println!("atomic: Pause player movement: {}", PAUSEPLAYER.load(Ordering::Relaxed));
-                }
-                if ui.checkbox(&mut self.pause_shooting, "Pause shooting").clicked() {
-                    PAUSESHOOTING.store(self.pause_shooting, Ordering::Relaxed);
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label("Min Radius:");
-                if ui.add(egui::DragValue::new(&mut self.min_radius).speed(0.1)).changed() {
-                    self.sender.send(Command::Radius { min_radius: self.min_radius, max_radius: self.max_radius }).unwrap();
-                }
-                ui.label("Max Radius:");
-                if ui.add(egui::DragValue::new(&mut self.max_radius).speed(0.1)).changed() {
-                    self.sender.send(Command::Radius { min_radius: self.min_radius, max_radius: self.max_radius }).unwrap();
-                }
-                // color stuff
-                egui::ComboBox::from_label("Selection")
-                    .selected_text(format!("{}", match self.selection {
-                        Selection::Separation => "Separation",
-                        Selection::Addition => "Addition",
-                    }))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.selection, Selection::Separation, "Separation");
-                        ui.selectable_value(&mut self.selection, Selection::Addition, "Addition");
-                    });
-                match self.selection {
-                    Selection::Separation => {
-                        // inputs for r g b
-                        ui.label("R:");
-                        ui.add(egui::DragValue::new(&mut self.r).speed(1));
-                        ui.label("G:");
-                        ui.add(egui::DragValue::new(&mut self.g).speed(1));
-                        ui.label("B:");
-                        ui.add(egui::DragValue::new(&mut self.b).speed(1));
-                        let r = self.r; // Clone current values of self.r, self.g, self.b
-                        let g = self.g;
-                        let b = self.b;
-
-                        // Create a closure with `'static` lifetime
-                        self.selection_fn = Box::new(move |r_in, g_in, b_in| {
-                            r_in > r && g_in > g && b_in > b
-                        });
-                    }
-                    Selection::Addition => {
-                        ui.label("Sum:");
-                        ui.add(egui::DragValue::new(&mut self.sum).speed(1));
-                        let sum = self.sum; // Clone current value of self.sum
-
-                        // Create a closure with `'static` lifetime
-                        self.selection_fn = Box::new(move |r_in, g_in, b_in| {
-                            r_in as i32 + g_in as i32 + b_in as i32 > sum
-                        });
-                    }
-                }
-                if self.last_rgb_sum != (self.r, self.g, self.b, self.sum) {
-                    self.last_rgb_sum = (self.r, self.g, self.b, self.sum);
-                    self.sender.send(Command::SelectionFn { selection_type: self.selection, r: self.r, g: self.g, b: self.b, sum: self.sum }).unwrap();
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label("Exposure: ");
-                if ui
-                    .add(egui::DragValue::new(&mut self.exposure).speed(0.01))
-                    .clicked()
-                    || ui.button("Set Exposure").clicked()
-                {
-                    self.sender.send(Command::Exposure(self.exposure)).unwrap();
-                }
-                ui.checkbox(&mut self.show_original, "Show original Image");
-                ui.checkbox(&mut self.auto_exposure, "Auto Exposure");
-                ui.checkbox(&mut self.calibration_mode, "Calibration Mode");
-                ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
-                ui.checkbox(&mut self.overlay_ball, "Overlay Ball");
-                ui.checkbox(&mut self.show_selection, "Show Selection");
-                ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
-                if ui.checkbox(&mut self.followball, "Follow Ball").clicked() {
-                    FOLLOWBALL.store(self.followball, Ordering::Relaxed);
-                }
-                if matches!(self.mode, Mode::PlayerCalibration) {
-                    ui.label("Click on Player!");
-                    if self.player_calibration_message.len() > 0 {
-                        ui.label(&self.player_calibration_message);
-                    }
-                    if ui.button("Next").clicked() || ui.input(|ui| ui.key_pressed(egui::Key::S)) {
-                        if self.click_position.is_none() {
-                            self.player_calibration_message = "Click on the player!".to_string();
-                        } else {
-                            let pos = self.click_position.unwrap();
-                            let posy = pos.y as i32;
-                            self.player_calibration_message = format!("pos: {}, {}/{}", posy, self.player_calibration_pos, POS.len());
-                            // if self.player_calibration_pos >= 0 {
-                            self.final_player_calibration_positions.push(posy);
-                            // }
-                            println!("Player pos: y:{}", posy);
-                            self.player_calibration_pos += 1;
-                            self.sender.send(Command::PlayerCalibration(POS[self.player_calibration_pos as usize]));
-                            if self.player_calibration_pos >= POS.len() as i32 - 1 {
-                                self.mode = Mode::Normal;
-                                println!("Player calibration finished");
-                                println!("pos: {:?}", self.final_player_calibration_positions);
-                                println!("Player calibration positions: {}", self.final_player_calibration_positions.iter().enumerate().map(|(i, x)| format!("\t{}: {}: {}\n", i, POS[i], x)).collect::<Vec<String>>().join(""));
-                                self.sender.send(Command::FinishPlayerCalibration(self.final_player_calibration_positions.clone()));
-                                PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
-                                self.pause_player = false;
-                            } else {}
-                        }
-                    }
-                } else {
-                    if ui.button("Player Calibration").clicked() {
-                        self.mode = Mode::PlayerCalibration;
-                        self.player_calibration_pos = -1;
-                        PAUSEPLAYER.store(true, Ordering::Relaxed);
-                        self.pause_player = true;
-                        self.sender.send(Command::PlayerCalibration(-1));
-                        self.final_player_calibration_positions.clear();
-                    }
-                }
-                if self.calibration_mode {
-                    ui.label("Calibration Image Interval: ");
-                    ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
-                }
                 if ui
                     .button(format!("{}", if self.paused { "Play" } else { "Pause" }))
                     .clicked()
@@ -728,7 +612,186 @@ impl eframe::App for App {
                     }
                 }
             });
+
+            ui.horizontal(|ui| {
+                ui.label("Image: ");
+                ui.label("Exposure: ");
+                if ui
+                    .add(egui::DragValue::new(&mut self.exposure).speed(0.01))
+                    .clicked()
+                    || ui.button("Set Exposure").clicked()
+                {
+                    self.sender.send(Command::Exposure(self.exposure)).unwrap();
+                }
+                ui.label("Brightness: ");
+                ui.add(egui::DragValue::new(&mut self.brightness).speed(0.01).clamp_range(0.0..=10.0));
+                ui.checkbox(&mut self.show_original, "Show original Image");
+                ui.checkbox(&mut self.show_undistorted, "Show undistorted Image");
+                ui.checkbox(&mut self.auto_exposure, "Auto Exposure");
+                ui.checkbox(&mut self.calibration_mode, "Calibration Mode");
+                ui.checkbox(&mut self.overlay_raw_img, "Overlay Raw Image");
+            });
+            ui.horizontal(|ui| {
+               ui.label("Ball Detection: ");
+                ui.label("Min Radius:");
+                if ui.add(egui::DragValue::new(&mut self.min_radius).speed(0.1)).changed() {
+                    self.sender.send(Command::Radius { min_radius: self.min_radius, max_radius: self.max_radius }).unwrap();
+                }
+                ui.label("Max Radius:");
+                if ui.add(egui::DragValue::new(&mut self.max_radius).speed(0.1)).changed() {
+                    self.sender.send(Command::Radius { min_radius: self.min_radius, max_radius: self.max_radius }).unwrap();
+                }
+                ui.colored_label(min_pixel_color,"Min Pixel:");
+                if ui.add(egui::DragValue::new(&mut self.min_pixel).speed(0.1)).changed() {
+                    self.sender.send(Command::BallPixel { min_pixel: self.min_pixel, max_pixel: self.max_pixel }).unwrap();
+                }
+                ui.colored_label(max_pixel_color,"Max Pixel:");
+                if ui.add(egui::DragValue::new(&mut self.max_pixel).speed(0.1)).changed() {
+                    self.sender.send(Command::BallPixel { min_pixel: self.min_pixel, max_pixel: self.max_pixel }).unwrap();
+                }
+                ui.checkbox(&mut self.show_min_max_pixel, "Show min max pixel");
+
+                // color stuff
+                egui::ComboBox::from_label("Selection")
+                    .selected_text(format!("{}", match self.selection {
+                        Selection::Separation => "Separation",
+                        Selection::Addition => "Addition",
+                    }))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.selection, Selection::Separation, "Separation");
+                        ui.selectable_value(&mut self.selection, Selection::Addition, "Addition");
+                    });
+                match self.selection {
+                    Selection::Separation => {
+                        // inputs for r g b
+                        ui.label("R:");
+                        ui.add(egui::DragValue::new(&mut self.r).speed(1));
+                        ui.label("G:");
+                        ui.add(egui::DragValue::new(&mut self.g).speed(1));
+                        ui.label("B:");
+                        ui.add(egui::DragValue::new(&mut self.b).speed(1));
+                        let r = self.r; // Clone current values of self.r, self.g, self.b
+                        let g = self.g;
+                        let b = self.b;
+
+                        // Create a closure with `'static` lifetime
+                        self.selection_fn = Box::new(move |r_in, g_in, b_in| {
+                            r_in > r && g_in > g && b_in > b
+                        });
+                    }
+                    Selection::Addition => {
+                        ui.label("Sum:");
+                        ui.add(egui::DragValue::new(&mut self.sum).speed(1));
+                        let sum = self.sum; // Clone current value of self.sum
+
+                        // Create a closure with `'static` lifetime
+                        self.selection_fn = Box::new(move |r_in, g_in, b_in| {
+                            r_in as i32 + g_in as i32 + b_in as i32 > sum
+                        });
+                    }
+                }
+                if self.last_rgb_sum != (self.r, self.g, self.b, self.sum) {
+                    self.last_rgb_sum = (self.r, self.g, self.b, self.sum);
+                    self.sender.send(Command::SelectionFn { selection_type: self.selection, r: self.r, g: self.g, b: self.b, sum: self.sum }).unwrap();
+                }
+                ui.checkbox(&mut self.show_selection, "Show Selection");
+                ui.checkbox(&mut self.overlay_ball, "Overlay Ball Detection");
+                ui.checkbox(&mut self.overlay_ball_prediction, "Overlay Ball Prediction");
+                // ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
+                if matches!(self.mode, Mode::PlayerCalibration) {
+                    ui.label("Click on Player!");
+                    if self.player_calibration_message.len() > 0 {
+                        ui.label(&self.player_calibration_message);
+                    }
+                    if ui.button("Next").clicked() || ui.input(|ui| ui.key_pressed(egui::Key::S)) {
+                        if self.click_position.is_none() {
+                            self.player_calibration_message = "Click on the player!".to_string();
+                        } else {
+                            let pos = self.click_position.unwrap();
+                            let posy = pos.y as i32;
+                            self.player_calibration_message = format!("pos: {}, {}/{}", posy, self.player_calibration_pos, POS.len());
+                            // if self.player_calibration_pos >= 0 {
+                            self.final_player_calibration_positions.push(posy);
+                            // }
+                            println!("Player pos: y:{}", posy);
+                            self.player_calibration_pos += 1;
+                            self.sender.send(Command::PlayerCalibration(POS[self.player_calibration_pos as usize]));
+                            if self.player_calibration_pos >= POS.len() as i32 - 1 {
+                                self.mode = Mode::Normal;
+                                println!("Player calibration finished");
+                                println!("pos: {:?}", self.final_player_calibration_positions);
+                                println!("Player calibration positions: {}", self.final_player_calibration_positions.iter().enumerate().map(|(i, x)| format!("\t{}: {}: {}\n", i, POS[i], x)).collect::<Vec<String>>().join(""));
+                                self.sender.send(Command::FinishPlayerCalibration(self.final_player_calibration_positions.clone()));
+                                PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
+                                self.pause_player = false;
+                            } else {}
+                        }
+                    }
+                } else {
+                    if ui.button("Player Calibration").clicked() {
+                        self.mode = Mode::PlayerCalibration;
+                        self.player_calibration_pos = -1;
+                        PAUSEPLAYER.store(true, Ordering::Relaxed);
+                        self.pause_player = true;
+                        self.sender.send(Command::PlayerCalibration(-1));
+                        self.final_player_calibration_positions.clear();
+                    }
+                }
+                if self.calibration_mode {
+                    ui.label("Calibration Image Interval: ");
+                    ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
+                }
+            });
+            ui.horizontal(|ui|{
+                ui.label("Player:");
+                if ui.button("Reset").clicked() {
+                    // self.arduino_com.send_command(com::commands::Command::Reset(0));
+                    // self.arduino_com.send_string("R");
+                    self.sender.send(Reset).unwrap();
+                }
+                if ui.button("Reset DC").clicked() {
+                    self.sender.send(Command::ResetDC).unwrap();
+                }
+                if ui.button("Move to center").clicked() {
+                    self.sender.send(Command::MoveCenter).unwrap();
+                }
+                if ui.button("Shoot").clicked() {
+                    self.sender.send(Command::Shoot).unwrap();
+                }
+                ui.label("Shoot prepone time:");
+                if ui.add(egui::DragValue::new(&mut self.timing_offset).speed(0.1)).changed() {
+                    TIMING_OFFSET.store(self.timing_offset, Ordering::Relaxed);
+                }
+                ui.label("s");
+                if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
+                    println!("Pause player movement: {}", self.pause_player);
+                    PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
+                    println!("atomic: Pause player movement: {}", PAUSEPLAYER.load(Ordering::Relaxed));
+                }
+                if ui.checkbox(&mut self.pause_shooting, "Pause shooting").clicked() {
+                    PAUSESHOOTING.store(self.pause_shooting, Ordering::Relaxed);
+                }
+                if ui.checkbox(&mut self.followball, "Follow Ball").clicked() {
+                    FOLLOWBALL.store(self.followball, Ordering::Relaxed);
+                }
+            });
+
+            let undistorted_texture = load_texture_from_image(ctx, ci_image.clone());
+            let original_texture = load_texture_from_image(
+                ctx,
+                ColorImage::from_rgb(
+                    [
+                        original_image.width() as usize,
+                        original_image.height() as usize,
+                    ],
+                    original_image.as_bytes(),
+                ),
+            );
+            if self.recording {
+                self.recorded_images.push(ci_image.clone());
+            }
             // ui.image(&texture);
+            // ui.centered_and_justified(|ui| {
             egui::Frame::canvas(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     if self.show_original {
@@ -736,26 +799,29 @@ impl eframe::App for App {
                             egui::Image::new(&original_texture), // .max_width(200.0).rounding(10.0)
                         );
                     }
-                    let response = ui.image(&undistorted_texture).interact(egui::Sense::click());
-                    if response.clicked() {
-                        if let Some(pos) = response.hover_pos() {
-                            // Get the click position relative to the image
-                            let local_pos = pos - response.rect.min;
-                            self.click_position = Some(local_pos);
+                    if self.show_undistorted {
+                        let response = ui.image(&undistorted_texture).interact(egui::Sense::click());
+                        if response.clicked() {
+                            if let Some(pos) = response.hover_pos() {
+                                // Get the click position relative to the image
+                                let local_pos = pos - response.rect.min;
+                                self.click_position = Some(local_pos);
 
-                            // Log the pixel coordinates
-                            println!("Clicked at: ({}, {})", local_pos.x as u32, local_pos.y as u32);
+                                // Log the pixel coordinates
+                                println!("Clicked at: ({}, {})", local_pos.x as u32, local_pos.y as u32);
+                            }
                         }
-                    }
 
-                    // Draw the red dot where the user clicked
-                    if let Some(pos) = self.click_position {
-                        let screen_pos = response.rect.min + pos;
-                        ui.painter()
-                            .circle_filled(screen_pos, 5.0, egui::Color32::RED);
+                        // Draw the red dot where the user clicked
+                        if let Some(pos) = self.click_position {
+                            let screen_pos = response.rect.min + pos;
+                            ui.painter()
+                                .circle_filled(screen_pos, 5.0, egui::Color32::RED);
+                        }
                     }
                 });
             });
+            // });
             ui.label(format!("FPS: {:>5.0}", 1. / (*FPS.lock().unwrap())));
         });
         ctx.request_repaint();
@@ -787,6 +853,12 @@ impl App {
             .send(Command::Radius {
                 min_radius: app.min_radius,
                 max_radius: app.max_radius,
+            })
+            .unwrap();
+        app.sender
+            .send(Command::BallPixel {
+                min_pixel: app.min_pixel,
+                max_pixel: app.max_pixel,
             })
             .unwrap();
         app.sender
@@ -893,9 +965,10 @@ pub fn subtract_image(original: &mut [u8], other: &[u8]) {
 fn main() {
     // Enumerates all cameras connected to the host.
     let mut cameras = cameleon::u3v::enumerate_cameras().unwrap();
-
+    let (tx, rx): (Sender<Command>, Receiver<Command>) = mpsc::channel();
     if cameras.is_empty() {
         println!("no camera found");
+        run_camera_test(tx);
         return;
     }
 
@@ -903,7 +976,7 @@ fn main() {
 
     // Opens the camera.
     camera.open().unwrap();
-    // Loads `GenApi` context. This is necessary for streaming.
+    // Loads `GenApi` context. This is necessary for streaming
     camera.load_context().unwrap();
 
     // let mut params_ctxt = camera.params_ctxt().unwrap();
@@ -922,7 +995,6 @@ fn main() {
 
     // Start streaming. Channel capacity is set to 3.
     let mut payload_rx = camera.start_streaming(3).unwrap();
-    let (tx, rx): (Sender<Command>, Receiver<Command>) = mpsc::channel();
 
     let t0_first_thread = std::time::Instant::now();
     let t0_second_thread = std::time::Instant::now();
@@ -988,8 +1060,8 @@ fn main() {
         // functions
         const MIN_MOTOR: i32 = 0;
         const MAX_MOTOR: i32 = 400;
-        const MIN_PIXEL: i32 = 226;
-        const MAX_PIXEL: i32 = 350;
+        let mut min_pixel = 226;
+        let mut max_pixel = 350;
         fn move_y(
             x: f32,
             o_y: f32,
@@ -999,6 +1071,8 @@ fn main() {
             player_0: i32,
             player_target: &mut i32,
             paused_player: bool,
+            min_pixel: i32,
+            max_pixel: i32,
         ) {
             *player_target = o_y as i32;
             // let y = rl_comp.transform_point((x, o_y)).1 + player_0 as f32;
@@ -1022,9 +1096,9 @@ fn main() {
             // y = -2.66 * x + 930.76
             // motor = y - 350
             // println!("y: {y}, min: {MIN_PIXEL}, max: {MAX_PIXEL}");
-            if y > MIN_PIXEL as f32
-                && y < MAX_PIXEL as f32
-                && last_command.elapsed().as_secs_f32() > 0.15
+            if y > min_pixel as f32
+                && y < max_pixel as f32
+                && last_command.elapsed().as_secs_f32() > 0.05
             {
                 // convert from pixel y to motor
                 // let m = (MIN_MOTOR - MAX_MOTOR) as f32 / (MAX_PIXEL - MIN_PIXEL) as f32;
@@ -1037,11 +1111,9 @@ fn main() {
                 // cnc shield:
                 // let x = -0.0000290357 * y.powi(3) + 0.0254211269 * y.powi(2) + -9.9442296735 * y.powi(1) + 1665.2808047191;
                 // rs485 shield:
-                let x = 0.0000934593 * y.powi(3)
-                    + -0.0851183453 * y.powi(2)
-                    + 22.9138846564 * y.powi(1)
-                    + -1556.2043785734;
-                // println!("y: {y}, x: {x}");
+                let x = 0.0001406343 * y.powi(3) + -0.1126699635 * y.powi(2) + 26.7354142148 * y.powi(1) + -1581.6643947128;
+
+
                 let x = x as i32;
                 // println!("sending: y: {x}");
                 let paused_player = PAUSEPLAYER.load(Ordering::Relaxed);
@@ -1057,9 +1129,11 @@ fn main() {
             last_command: &mut Instant,
             player_0: i32,
             paused_player: bool,
+            min_pixel: i32,
+            max_pixel: i32,
         ) {
             if !PAUSEPLAYER.load(Ordering::Relaxed) {
-                let y = (MIN_PIXEL + MAX_PIXEL) as f32 / 2.;
+                let y = (min_pixel + max_pixel) as f32 / 2.;
                 if last_command.elapsed().as_secs_f32() > 0.05 {
                     // println!("Moving to center");
                     // arduino_com.send_string(&format!("{}", 212 as i32));
@@ -1073,6 +1147,8 @@ fn main() {
                         player_0,
                         &mut 0,
                         paused_player,
+                        min_pixel,
+                        max_pixel,
                     );
                     *last_command = Instant::now();
                 }
@@ -1120,7 +1196,14 @@ fn main() {
                         // raw_image = raw_image1.clone();
                     }
                     MoveCenter => {
-                        move_center(&mut arduino_com, &mut last_command, 0, pause_player);
+                        move_center(
+                            &mut arduino_com,
+                            &mut last_command,
+                            0,
+                            pause_player,
+                            min_pixel,
+                            max_pixel,
+                        );
                         moved_to_center = true;
                     }
                     Shoot => {
@@ -1215,6 +1298,13 @@ fn main() {
                     } => {
                         min_radius = min;
                         max_radius = max;
+                    }
+                    BallPixel {
+                        min_pixel: min,
+                        max_pixel: max,
+                    } => {
+                        min_pixel = min;
+                        max_pixel = max;
                     }
                 }
             }
@@ -1333,7 +1423,7 @@ fn main() {
                         if let Some(intersection) = intersection {
                             // println!("intersection: {:?}", intersection);
                             let t = intersection.1;
-                            let prepone = 0.25;
+                            let prepone = TIMING_OFFSET.load(Ordering::Relaxed); // default 0.25s
                             if t > prepone && ball_comp.velocity.magnitude() > 50.0 {
                                 // println!("t: {}, v: {}, t0: {}, t0 + t: {}", t, ball_comp.velocity.magnitude(), t0.elapsed().as_secs_f32(), t0.elapsed().as_secs_f32() + t);
                                 shoot_time = t0.elapsed().as_secs_f32() + t - prepone;
@@ -1351,6 +1441,8 @@ fn main() {
                                     player_0,
                                     &mut player_target,
                                     pause_player,
+                                    min_pixel,
+                                    max_pixel,
                                 );
 
                                 time_since_catch = Instant::now();
@@ -1364,6 +1456,8 @@ fn main() {
                                     &mut last_command,
                                     player_0,
                                     pause_player,
+                                    min_pixel,
+                                    max_pixel,
                                 );
                             }
                             moved_to_center = true;
@@ -1375,6 +1469,8 @@ fn main() {
                                 &mut last_command,
                                 player_0,
                                 pause_player,
+                                min_pixel,
+                                max_pixel,
                             );
                         }
                         moved_to_center = true;
@@ -1392,8 +1488,8 @@ fn main() {
                     }
 
                     let y = ball.1 as f32;
-                    if y > MIN_PIXEL as f32
-                        && y < MAX_PIXEL as f32
+                    if y > min_pixel as f32
+                        && y < max_pixel as f32
                         && last_command.elapsed().as_secs_f32() > 0.05
                     {
                         // convert from pixel y to motor
@@ -1414,6 +1510,8 @@ fn main() {
                             0,
                             &mut player_target,
                             pause_player,
+                            min_pixel,
+                            max_pixel,
                         );
                     }
                     if frame_counter % 1 == 0 {
@@ -1508,3 +1606,4 @@ pub static PLAYER_DETECTION_FPS: AtomicI32 = AtomicI32::new(0);
 pub static PAUSEPLAYER: AtomicBool = AtomicBool::new(false);
 pub static PAUSESHOOTING: AtomicBool = AtomicBool::new(false);
 pub static FOLLOWBALL: AtomicBool = AtomicBool::new(false);
+pub static TIMING_OFFSET: AtomicF32 = AtomicF32::new(0.);

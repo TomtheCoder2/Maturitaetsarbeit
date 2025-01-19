@@ -126,7 +126,7 @@ impl ArduinoCom {
         }
         writeln!(self.serial, "{}", s).expect("Failed to write to port");
         self.serial.flush().expect("Failed to flush port");
-        // println!("Sent: {}", s);
+        println!("Sent: {}", s);
     }
 
     pub fn force_send_string(&mut self, s: &str) {
