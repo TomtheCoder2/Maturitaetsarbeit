@@ -20,6 +20,8 @@ unsigned long start_shoot = -1000000;
 unsigned long shoot_intervall = 150;
 unsigned long reset_intervall = 300;
 
+int motor_speed = 0;
+
 const long int max_pos = 20000;
 int pos = 0;
 int ir_target = 0;
@@ -67,6 +69,14 @@ int pos_to_ir(int pos) {
   return (int)((245.6969697 * pos_f) / 1000.0f + 363.99f);
 }
 
+void set_speed(int speed) {
+  if (speed != motor_speed) {
+    motor_speed = speed;
+    sendCommand(0x01, 5, 0x04, speed);  // Maximum positioning speed
+    delay(30);
+  }
+}
+
 
 void setup() {
   Serial.begin(57600);
@@ -91,9 +101,9 @@ void setup() {
   read_output();
 
 
-  sendCommand(0x01, 5, 0x04, 2047);  // abs  target acc set
+  sendCommand(0x01, 5, 0x04, 2047);  // Maximum positioning speed
   delay(100);
-  sendCommand(0x01, 5, 0x05, 2047);  // abs  acc acc set
+  sendCommand(0x01, 5, 0x05, 2047);  // Maximum acceleration
   delay(100);
   sendCommand(0x01, 5, 0x8c, 7);  // microstep res
   delay(100);
@@ -139,7 +149,6 @@ void loop() {
       stop();
       reset_dc_pos();
       while (!dc_loop(-35)) {
-
       }
       reset_dc_pos();
       Serial.println("Reset dc motor");
@@ -197,39 +206,50 @@ void loop() {
       // pos = current_pos;
       // long long int input_int = clamp(convert(drive_pos), 0, max_pos);
       reset_counter--;
+      int ir = vout_int();
+      int current_pos = ir_to_pos(ir);
       if (reset_counter < 0) {
-        int ir = vout_int();
-        int current_pos = ir_to_pos(ir);
-        sendCommand(0x01, 5, 1, -convert(current_pos));  // set actual position
+        // sendCommand(0x01, 5, 1, -convert(current_pos));  // set actual position
         // sendCommand(0x01, 5, 1, -convert(pos));  // set actual position
-        delay(50);
+        // delay(50);
         reset_counter = 1;
       }
-      // pos = input.toInt();
+      pos = input.toInt();
+      set_speed(2047);  // Maximum positioning speed
+      
 
       // long long int input_int = clamp(convert(input.toInt()), 0, max_pos);
-      long long int input_int = convert(input.toInt());
-      // Serial.print("pos: "); Serial.println((long)input_int);
-      sendCommand(0x01, 0x04, 0x00, -input_int);
+      long long int input_int = convert((int)(0.8 * (float)input.toInt()));
+      // Serial.print("pos: "); Serial.println((long)input_int); 
+      // sendCommand(0x01, 0x04, 0x00, -input_int);
       // delay(100);
-      // corrections = 5;
+      corrections = 50;
     }
   }
   if (corrections > 0) {
-    int ir = vout();
+    int ir = vout_100();
     int current_pos = ir_to_pos(ir);
     // pos = 100, current_pos = 120, correction = -20
-    int correction = (pos - current_pos) * 3 / 5;
-    if (abs(correction) < 50) {
-      int drive_pos = pos + correction;
-      pos = drive_pos;
-      long long int input_int = clamp(convert(drive_pos), 0, max_pos);
+    int correction = (pos - current_pos) * 3 / 4;
+    if (abs(correction) > 1) {
+      // int drive_pos = pos + correction;
+      // pos = drive_pos;
+      long long int input_int = convert(pos);
       // Serial.print("pos: ");
-      // Serial.println((long)input_int);
+      // Serial.println((long)current_pos);
       // sendCommand(0x01, 0x04, 0x00, -input_int);
-      sendCommand(0x01, 5, 1, -convert(current_pos));  // set actual position
-      delay(10);
-      // Serial.println(correction);
+      // sendCommand(0x01, 5, 1, -convert(current_pos));  // set actual position
+      // delay(100);
+      // sendCommand(0x01, 0x04, 0x00, -input_int);
+      // delay(20);
+      if (abs(correction) < 30) {
+        set_speed(200);
+        correction = (pos - current_pos) * 3 / 10;
+      }
+      // sendCommand(0x01, 5, 0x8c, 10);  // microstep res
+      // delay(20);
+      sendCommand(0x01, 0x04, 0x01, -convert(correction));
+      // delay(20);
       corrections--;
     }
   }

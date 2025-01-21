@@ -3,7 +3,7 @@ fn main() {
     let mut pos = 100;
     loop {
         arduino_com.send_string(&format!("{}", pos % 330));
-        pos += 50;
+        pos += 5;
         //     sleep 150 ms
         std::thread::sleep(std::time::Duration::from_millis(150));
     } // loop {}

@@ -1,4 +1,4 @@
-use matura::ball::standard_selection;
+use matura::ball::{standard_selection, MAGNITUE_DIFF};
 use matura::compute_rl_coords::RLCompute;
 use std::f32::consts::PI;
 use std::sync::atomic::AtomicBool;
@@ -130,6 +130,7 @@ pub struct App {
     min_pixel: i32,
     max_pixel: i32,
     timing_offset: f32,
+    magnitude_diff: i32,
 }
 
 const POS: [i32; 7] = [50, 100, 150, 200, 250, 300, 350];
@@ -186,6 +187,7 @@ impl Default for App {
             min_pixel: 226,
             max_pixel: 350,
             timing_offset: 0.25,
+            magnitude_diff: 20,
         }
     }
 }
@@ -697,7 +699,44 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.show_selection, "Show Selection");
                 ui.checkbox(&mut self.overlay_ball, "Overlay Ball Detection");
                 ui.checkbox(&mut self.overlay_ball_prediction, "Overlay Ball Prediction");
+                ui.label("Magnitude Diff:");
+                if ui.add(egui::DragValue::new(&mut self.magnitude_diff).speed(1)).changed() {
+                    MAGNITUE_DIFF.store(self.magnitude_diff, Ordering::Relaxed);
+                }
                 // ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
+            });
+            ui.horizontal(|ui|{
+                ui.label("Player:");
+                if ui.button("Reset").clicked() {
+                    // self.arduino_com.send_command(com::commands::Command::Reset(0));
+                    // self.arduino_com.send_string("R");
+                    self.sender.send(Reset).unwrap();
+                }
+                if ui.button("Reset DC").clicked() {
+                    self.sender.send(Command::ResetDC).unwrap();
+                }
+                if ui.button("Move to center").clicked() {
+                    self.sender.send(Command::MoveCenter).unwrap();
+                }
+                if ui.button("Shoot").clicked() {
+                    self.sender.send(Command::Shoot).unwrap();
+                }
+                ui.label("Shoot prepone time:");
+                if ui.add(egui::DragValue::new(&mut self.timing_offset).speed(0.1)).changed() {
+                    TIMING_OFFSET.store(self.timing_offset, Ordering::Relaxed);
+                }
+                ui.label("s");
+                if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
+                    println!("Pause player movement: {}", self.pause_player);
+                    PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
+                    println!("atomic: Pause player movement: {}", PAUSEPLAYER.load(Ordering::Relaxed));
+                }
+                if ui.checkbox(&mut self.pause_shooting, "Pause shooting").clicked() {
+                    PAUSESHOOTING.store(self.pause_shooting, Ordering::Relaxed);
+                }
+                if ui.checkbox(&mut self.followball, "Follow Ball").clicked() {
+                    FOLLOWBALL.store(self.followball, Ordering::Relaxed);
+                }
                 if matches!(self.mode, Mode::PlayerCalibration) {
                     ui.label("Click on Player!");
                     if self.player_calibration_message.len() > 0 {
@@ -740,39 +779,6 @@ impl eframe::App for App {
                 if self.calibration_mode {
                     ui.label("Calibration Image Interval: ");
                     ui.add(egui::DragValue::new(&mut self.calibration_interval).speed(0.1));
-                }
-            });
-            ui.horizontal(|ui|{
-                ui.label("Player:");
-                if ui.button("Reset").clicked() {
-                    // self.arduino_com.send_command(com::commands::Command::Reset(0));
-                    // self.arduino_com.send_string("R");
-                    self.sender.send(Reset).unwrap();
-                }
-                if ui.button("Reset DC").clicked() {
-                    self.sender.send(Command::ResetDC).unwrap();
-                }
-                if ui.button("Move to center").clicked() {
-                    self.sender.send(Command::MoveCenter).unwrap();
-                }
-                if ui.button("Shoot").clicked() {
-                    self.sender.send(Command::Shoot).unwrap();
-                }
-                ui.label("Shoot prepone time:");
-                if ui.add(egui::DragValue::new(&mut self.timing_offset).speed(0.1)).changed() {
-                    TIMING_OFFSET.store(self.timing_offset, Ordering::Relaxed);
-                }
-                ui.label("s");
-                if ui.checkbox(&mut self.pause_player, "Pause player movement").clicked() {
-                    println!("Pause player movement: {}", self.pause_player);
-                    PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
-                    println!("atomic: Pause player movement: {}", PAUSEPLAYER.load(Ordering::Relaxed));
-                }
-                if ui.checkbox(&mut self.pause_shooting, "Pause shooting").clicked() {
-                    PAUSESHOOTING.store(self.pause_shooting, Ordering::Relaxed);
-                }
-                if ui.checkbox(&mut self.followball, "Follow Ball").clicked() {
-                    FOLLOWBALL.store(self.followball, Ordering::Relaxed);
                 }
             });
 
@@ -1109,9 +1115,9 @@ fn main() {
                 // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
                 let y = y as f64;
                 // cnc shield:
-                // let x = -0.0000290357 * y.powi(3) + 0.0254211269 * y.powi(2) + -9.9442296735 * y.powi(1) + 1665.2808047191;
+                let x = -0.0000405705 * y.powi(3) + 0.0360210121 * y.powi(2) + -14.1056642869 * y.powi(1) + 2196.7262399133;
                 // rs485 shield:
-                let x = 0.0001406343 * y.powi(3) + -0.1126699635 * y.powi(2) + 26.7354142148 * y.powi(1) + -1581.6643947128;
+                // let x = 0.0001587715 * y.powi(3) + -0.1268654294 * y.powi(2) + 30.4151445206 * y.powi(1) + -1892.1674459350;
 
 
                 let x = x as i32;
@@ -1383,6 +1389,7 @@ fn main() {
                         &selection_fn,
                         min_radius,
                         max_radius,
+                        10
                     );
                     let elapsed_ball_comp = ball_comp_t0.elapsed();
                     if elapsed_ball_comp.as_secs_f32() * 1000.0 > 5. {
