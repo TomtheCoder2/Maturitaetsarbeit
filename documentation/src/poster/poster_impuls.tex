@@ -1,4 +1,4 @@
-\documentclass[paperheight=128cm,paperwidth=89.5cm,portrait]{./baposter}
+\documentclass[paperheight=140cm,paperwidth=100cm,portrait]{./baposter}
 
 % intro, system, construction, Electronics and software, - Flowchart, Results, Acknowledgement
 % todo:
@@ -88,7 +88,8 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
     {
         grid=false,
         headerborder=open, % Adds a border around the header of content boxes
-        colspacing=1em, % Column spacing
+        colspacing=1.3em, % Column spacing
+        rowspacing=1.3em, % Row spacing
         bgColorOne=white, % Background color for the gradient on the left side of the poster
         bgColorTwo=white, % Background color for the gradient on the right side of the poster
         borderColor=hopro_blue, % Border color
@@ -101,10 +102,11 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
         headerheight=0.15\textheight, % Height of the header
         headershape=rounded, % Specify the rounded corner in the content box headers, can be: rectangle, small-rounded, roundedright, roundedleft or rounded
         headershade=plain,
-        boxheaderheight=0.8cm,
+        boxheaderheight=0.95cm,
         headerfont=\huge\textsf, % Large, bold and sans serif font in the headers of content boxes
 %textfont={\setlength{\parindent}{1.5em}}, % Uncomment for paragraph indentation
         linewidth=2pt % Width of the border lines around content boxes
+%        set font size in the content boxes
     }
     {}
 %
@@ -128,7 +130,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
             }\\
             \sf\vspace{0.5em}
             \fontsize{18}{8}\selectfont
-            Jan Wilhelm, 6e \hspace{0.3cm} \textbf{Supervisor}: Clemens Pohle, \textbf{Advisor:} Dr. Hugo Leonel Cabrera Cifuentes
+            Jan Wilhelm, 6e \hspace{0.3cm} \textbf{Supervisor}: Clemens Pohle, \textbf{Advisor:} Dr. Hugo Leonel Cabrera Cifuentes\\ \vspace{0.5cm} \selectfont Kantonsschule Hohe Promenande Zürich
         \end{minipage}
         \vspace{1cm}
 
@@ -264,7 +266,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
             \setcaptiontype{figure}% Fake a figure environment
             \begin{center}
                 \centering
-                \scalebox{0.85}{
+                \scalebox{0.95}{
                     \begin{tikzpicture}[node distance=2cm]
 %                        flowchart
                         \node (cam) [io] {Camera};
@@ -307,7 +309,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
 
 %                        \node[draw, text width=5cm] at (0,-2) {}
                         \node (undistortion_original) [left of=ball_detection, xshift=-4.5cm, yshift=1cm] {\includegraphics[width=5.5cm]{../../photos/title}};
-                        \node (undistortion_undistorted) [right of=ball_detection, xshift=4.5cm, yshift=1cm] {\includegraphics[width=5.5cm]{../../photos/cnc_shield}};
+                        \node (undistortion_undistorted) [right of=ball_detection, xshift=4.5cm, yshift=1cm] {\includegraphics[width=5.5cm]{../../photos/cnc_shield_c}};
 
                     \end{tikzpicture}
                 }
@@ -378,7 +380,7 @@ mark=at position .7 with {\draw[ultra thick,stealth-,green!60!black,solid](-12pt
         \headerbox{7. QR Code}{name=qr_code,column=0,span=1,below=results,above=bottom}{
             \begin{center}
                 Further Photos and videos can be found here:\\
-                \includegraphics[height=0.67\linewidth]{../../photos/qr_code}
+                \includegraphics[height=0.75\linewidth]{../../photos/qr_code}
             \end{center}
         }
 
