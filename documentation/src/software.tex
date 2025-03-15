@@ -447,7 +447,7 @@ The ball detection in action is shown in figure~\ref{fig:ball_detection}.
 \end{figure}
 But having the pixel coordinates is not very useful, so the program has to convert the pixel coordinates to real-world coordinates.
 To compute the real world coordinates, the program compares the pixel coordinates of the ball to the pixel coordinates of the fiducials.
-The programm needs the real world coordinates to move the motors to the correct position as it is possible that the camera moves or the table moves, so the pixel coordinates are not reliable.
+The program needs the real world coordinates to move the motors to the correct position as it is possible that the camera moves or the table moves, so the pixel coordinates are not reliable.
 I measured the distance between the walls and the fiducials and made a coordinate system so that the fiducial with the number 2 lies in the top left corner (0,0) and the other fiducials are placed accordingly.
 Then, to compute the real world coordinates, the program uses a homography\autocite{homography} matrix to transform the pixel coordinates to real world coordinates.
 
