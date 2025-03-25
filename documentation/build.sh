@@ -21,3 +21,5 @@ pdflatex -file-line-error -interaction=nonstopmode -synctex=1 -output-format=pdf
 
 # Return to the original directory
 cd ..;
+
+# todos: fix image 7.11 on page 24
