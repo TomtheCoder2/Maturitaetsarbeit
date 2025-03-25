@@ -10,7 +10,7 @@ The controller unit moves the motors to the desired position.
         \begin{tikzpicture}
             \draw[fill=green!5] (7, 10) rectangle (0, 0);
             \begin{scope}
-                [shift={(3.5, 0)}]
+            [shift={(3.5, 0)}]
                 \node[below] {Foosball table};
             \end{scope}
 %        draw a circle in the middle and an arrow pointing there labling it the camera
@@ -30,7 +30,7 @@ The controller unit moves the motors to the desired position.
             text width=1.5cm,align=center
             ] {Move motor};
             \begin{scope}
-                [shift={(7.75, 7.25)}, scale=0.4]
+            [shift={(7.75, 7.25)}, scale=0.4]
                 \draw \gear{18}{2}{2.4}{10}{2};
             \end{scope}
             \draw[fill, black] (7.75, 7.25) circle (0.03);
@@ -46,10 +46,12 @@ The controller unit moves the motors to the desired position.
 \end{center}
 
 \newpage
+
+
 \section{Motors}\label{sec:motors}
 The motors have two primary tasks: positioning the goalkeeper and shooting the ball.
 A stepper motor controls the goalkeeper's movement, while a DC motor powers the ball's acceleration.
-The goalkeeper must defend against balls traveling at a maximum velocity of $v_{\text{max}} = \qty[per-mode=symbol]{7}{\m\per\s}$
+The goalkeeper must defend against balls traveling at a maximum velocity of $v_{\text{max}} = \qty[per-mode=symbol]{7}{\m\per\s}$.
 To meet this requirement, calculations are necessary to determine the required torque and speed for each motor.
 
 \subsection{Table measurements}\label{subsec:table_measurements}
@@ -67,7 +69,7 @@ Figure~\ref{fig:table_measurements} illustrates these measurements:
         \begin{tikzpicture}
             \node[anchor=south west,inner sep=0] (image) at (0,0) {\includegraphics[width=0.5\textwidth, opacity=0.8]{../photos/foosball_table}};
             \begin{scope}
-                [x={(image.south east)},y={(image.north west)}]
+            [x={(image.south east)},y={(image.north west)}]
 %        \draw[help lines,xstep=.1,ystep=.1] (0,0) grid (1,1);
 %        \foreach \x in {0,1,...,9} { \node [anchor=north] at (\x/10,0) {0.\x}; }
 %        \foreach \y in {0,1,...,9} { \node [anchor=east] at (0,\y/10) {0.\y}; }
@@ -94,8 +96,10 @@ That means the player has to stop the ball in time $t_s$, where
 \end{equation}
 This is not a lot of time to process the image and move the motors.
 I round the travel distance of the goalkeeper from $\qty[per-mode=symbol]{180}{\mm}$ to $\qty[per-mode=symbol]{200}{\mm}$ for the calculations because there is a spring at either end which can be compressed.
-I always keep the goalkeeper in the middle, such that the player has to travel a maximum distance of $$\qty[per-mode=symbol]{0.1}{\m}$$.
-That means the player has an average velocity of
+I always keep the goalkeeper in the middle, such that the player has to travel a maximum distance of
+$\qty[per-mode=symbol]{0.1}{\m}$.
+\newpage
+\noindent That means the player has an average velocity of
 \begin{equation}
     \label{eq:average_velocity}
     \bar{v} = \frac{s}{t_s} = \frac{\qty[per-mode=symbol]{0.1}{\m}}{\qty[per-mode=symbol]{0.057}{\s}} \approx \qty[per-mode=symbol]{1.75}{\m\per\s}.
@@ -112,8 +116,8 @@ A graph to explain the velocity can be seen here:
             axis y line=center,
             width={0.2\linewidth},
             xtick=none,
-            ytick={0,1},
-            yticklabels={,$v_{max}$},
+            ytick={0,0.5,1},
+            yticklabels={,$\bar{v}$,$v_{max}$},
             xlabel={$t$},
             ylabel={$v$},
             xlabel style={below right},
@@ -128,6 +132,7 @@ A graph to explain the velocity can be seen here:
                 1 1
                 2 0
             };
+            \addplot[dashed] coordinates {(-0.05, 0.5) (2.05, 0.5)};
         \end{axis}
     \end{tikzpicture}
 \end{center}
@@ -254,7 +259,7 @@ At time $t_e$, the player has rotated by $\qty[per-mode=symbol]{45}{\degree} = \
 Substituting $t_e$ into the equation~\ref{eq:angle} and solving for $t_e$:
 \begin{equation}
     \label{eq:time_to_rotate}
-   \theta(t_e)= \frac{1}{2} a_\omega t_e^2 = \frac{\pi}{4} \Rightarrow t_e = \sqrt{\frac{\pi}{2a_\omega}}
+    \theta(t_e)= \frac{1}{2} a_\omega t_e^2 = \frac{\pi}{4} \Rightarrow t_e = \sqrt{\frac{\pi}{2a_\omega}}
 \end{equation}
 Substituting $t_e$ into the equation~\ref{eq:angular_velocity} and knowing that the player has an angular velocity $\omega_e=\frac{2\pi}{t_{rot}}$ at time $t_e$, gives an equation for the angular acceleration, which can be solved for the angular acceleration $a_\omega$:
 \begin{equation}
@@ -277,7 +282,7 @@ The moment of inertia of a tube is:
     \label{eq:moment_of_inertia}
     I = \frac{1}{12} m_{player} \cdot l^2
 \end{equation}
-To shift the axis of rotation, the Parallel axis theorem can be used:
+To shift the axis of rotation, the parallel axis theorem can be used:
 \begin{equation}
     \label{eq:parallel_axis_theorem}
     I_0 = I_{S} + m_{player} \cdot s^2
@@ -309,7 +314,7 @@ The calculations to determine the actual $v_{max}$ are left as an exercise to th
 \section{Camera}\label{sec:camera}
 
 \subsection{Optics}\label{subsec:lens}
-To achieve my goal of defending against balls at speed of up to $\qty[per-mode=symbol]{7}{\m\per\s}$, I need a camera that can capture the entire table at a framerate of at least 150fps.
+To achieve my goal of defending against balls at speed of up to $\qty[per-mode=symbol]{7}{\m\per\s}$, I need a camera that can capture the entire table at a framerate of at least $150\text{ frames per second (fps)}$.
 I record the table from the bottom to avoid seeing the players and the rods instead of the ball; therefore, I have to replace the floor of the table with a glass plate.
 A sensor that achieves this is the \textbf{IMX287 CMOS} sensor from \textbf{Sony}.
 This sensor has a width of $w=\qty[per-mode=symbol]{4.98}{\mm}$.
