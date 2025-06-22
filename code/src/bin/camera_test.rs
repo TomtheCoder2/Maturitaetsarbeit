@@ -71,7 +71,7 @@ fn main() {
     // save images to file
     for (i, image) in images.iter().enumerate() {
         save_buffer_with_format(
-            format!("images/image_{}.jpg", i),
+            format!("images/image_{}.png", i),
             &image,
             width as u32,
             height as u32,

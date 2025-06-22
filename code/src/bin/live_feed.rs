@@ -91,8 +91,8 @@ pub struct App {
     ball_comp: BallComp,
     #[serde(skip)]
     start_time: Instant,
-    #[serde(skip)]
-    compute_rl_coords: matura::compute_rl_coords::RLCompute,
+    // #[serde(skip)]
+    // compute_rl_coords: matura::compute_rl_coords::RLCompute,
     #[serde(skip)]
     last_command: Instant,
     speed: i32,
@@ -157,7 +157,7 @@ impl Default for App {
             overlay_raw_img: false,
             ball_comp: BallComp::default(),
             start_time: Instant::now(),
-            compute_rl_coords: matura::compute_rl_coords::RLCompute::new(),
+            // compute_rl_coords: matura::compute_rl_coords::RLCompute::new(),
             last_command: Instant::now(),
             speed: 100,
             motor_pos: 0,
@@ -346,9 +346,9 @@ impl eframe::App for App {
             // x = 102 is the player
             if let Some(y_intercept) = self.ball_comp.intersection_x(44.) {
                 let y_intercept = y_intercept.0;
-                let rl_y_intercept = self.compute_rl_coords.transform_point((y_intercept.x, y_intercept.y));
+                // let rl_y_intercept = self.compute_rl_coords.transform_point((y_intercept.x, y_intercept.y));
                 // y=0 for the player is at 450mm rl coords
-                let player_y = 450. - rl_y_intercept.1;
+                let player_y = 450. - y_intercept[1];
                 // let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
                 // let player_y = 450. - ball_irl.1;
                 // ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
@@ -358,7 +358,7 @@ impl eframe::App for App {
                     // c
                     // 8° per step
                     // let rot = player_y / (PI * 64.) * 200.;
-                    let x = 1058.82 - 2.35 * rl_y_intercept.1;
+                    let x = 1058.82 - 2.35 * y_intercept[1];
                     // println!("pos: {player_y}");
                     // if rot < 30. {
                     // self.arduino_com.send_command(com::commands::Command::Reset(40));
@@ -381,7 +381,8 @@ impl eframe::App for App {
             // x = 1058.82 - 2.35 * y
             // y = 450 - 0.425 * x
 
-            let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
+            // let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
+            let ball_irl = (ball.0 as f32, ball.1 as f32);
             let player_y = 450. - ball_irl.1;
             // ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
             // ui.label(format!("Player pos: y: {:.2}", player_y));});
@@ -1028,7 +1029,7 @@ fn main() {
         println!("old width: {}, old height: {}", width, height);
         println!("new width: {}, new height: {}", new_width, new_height);
         let precompute = matura::gen_table(width, height, new_width, new_height, min_x, min_y);
-        let rl_comp = matura::compute_rl_coords::RLCompute::new();
+        // let rl_comp = matura::compute_rl_coords::RLCompute::new();
 
         let raw = load_raw();
         // we want to convert it to rgb from rgba, so we delete every 4th element
@@ -1073,7 +1074,7 @@ fn main() {
             o_y: f32,
             arduino_com: &mut ArduinoCom,
             last_command: &mut Instant,
-            rl_comp: &RLCompute,
+            // rl_comp: &RLCompute,
             player_0: i32,
             player_target: &mut i32,
             paused_player: bool,
@@ -1115,8 +1116,8 @@ fn main() {
                 // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
                 let y = y as f64;
                 // cnc shield:
-                let x = -0.0000405705 * y.powi(3) + 0.0360210121 * y.powi(2) + -14.1056642869 * y.powi(1) + 2196.7262399133;
-                // rs485 shield:
+                let x = -0.0004189967 * y.powi(3) + 0.3552839436 * y.powi(2) + -104.3478471873 * y.powi(1) + 10770.1690187946;
+                // rs485:
                 // let x = 0.0001587715 * y.powi(3) + -0.1268654294 * y.powi(2) + 30.4151445206 * y.powi(1) + -1892.1674459350;
 
 
@@ -1149,7 +1150,6 @@ fn main() {
                         y,
                         arduino_com,
                         last_command,
-                        &RLCompute::new(),
                         player_0,
                         &mut 0,
                         paused_player,
@@ -1234,7 +1234,7 @@ fn main() {
                             arduino_com.sync();
                             arduino_com.send_string("I");
                             // sleep for 500 ms
-                            // std::thread::sleep(std::time::Duration::from_millis(500));
+                            std::thread::sleep(std::time::Duration::from_millis(10));
                             let output = arduino_com.read_line();
                             println!("o: {}", output);
                             // output format:    Pos: 32
@@ -1372,6 +1372,7 @@ fn main() {
                     );
                     let undistorted_clone = undistorted_image.clone();
                     let ball_comp_t0 = std::time::Instant::now();
+                    // todo rever this
                     subtract_image(&mut undistorted_image, raw_image);
                     // let u_image = DynamicImage::ImageRgb8(
                     // ImageBuffer::from_raw(new_width, new_height, undistorted_image.clone())
@@ -1389,7 +1390,7 @@ fn main() {
                         &selection_fn,
                         min_radius,
                         max_radius,
-                        10
+
                     );
                     let elapsed_ball_comp = ball_comp_t0.elapsed();
                     if elapsed_ball_comp.as_secs_f32() * 1000.0 > 5. {
@@ -1444,7 +1445,7 @@ fn main() {
                                     intersection.y,
                                     &mut arduino_com,
                                     &mut last_command,
-                                    &rl_comp,
+                                    // &rl_comp,
                                     player_0,
                                     &mut player_target,
                                     pause_player,
@@ -1513,7 +1514,6 @@ fn main() {
                             ball.1 as f32,
                             &mut arduino_com,
                             &mut last_command,
-                            &rl_comp,
                             0,
                             &mut player_target,
                             pause_player,
@@ -1593,7 +1593,7 @@ fn main() {
     //         ACTUAL_PLAYER_POSITION.lock().unwrap().0 = player_position.0;
     //         ACTUAL_PLAYER_POSITION.lock().unwrap().1 =
     //             player_position.1 + (1. / 3. * height as f32) as u32;
-    //         ACTUAL_PLAYER_POSITION.lock().unwrap().2 = time;
+    //         ACTUAL_PLAYER_POSITION.lock().unwrap().2 = time;35383689
     //         ACTUAL_PLAYER_POSITION.lock().unwrap().3 = false;
     //         // println!("after: {:?}", t.elapsed());
     //         PLAYER_DETECTION_FPS.store(

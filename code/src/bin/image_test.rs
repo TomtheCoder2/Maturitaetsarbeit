@@ -36,7 +36,7 @@ fn main() {
     let mut file_count = 0;
     let mut ball_comp = matura::ball::BallComp::default();
     // let mut last_two_balls = (None, None);
-    let rl_compute = matura::compute_rl_coords::RLCompute::new();
+    // let rl_compute = matura::compute_rl_coords::RLCompute::new();
     let mut files = dir.fold(vec![], |mut acc, file| {
         let file = file.unwrap();
         let file_name = file.file_name().to_str().unwrap().to_string();

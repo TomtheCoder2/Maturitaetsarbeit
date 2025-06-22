@@ -4,6 +4,9 @@ use image::{DynamicImage, GenericImage, RgbImage};
 use image::{GenericImageView, ImageBuffer, Rgb, Rgba};
 use nalgebra::{clamp, Vector2};
 use std::fmt::{Display, Formatter};
+use std::sync::atomic::AtomicI32;
+
+pub static MAGNITUE_DIFF: AtomicI32 = AtomicI32::new(0);
 
 pub struct Ball {
     x: u32,

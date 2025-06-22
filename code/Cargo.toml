@@ -6,15 +6,15 @@ edition = "2021"
 [dependencies]
 image = "0.24.8"
 imageproc = "0.23.0"
-#cameleon = { version = "0.1.10", features = ["libusb"] }
+cameleon = { version = "0.1.10", features = ["libusb"] }
 #cameleon = { git = "https://github.com/cameleon-rs/cameleon/", branch = "fix-clippy-1.79", features = ["libusb"] }
-cameleon = { path = "./cameleon/cameleon", features = ["libusb"] }
+#cameleon = { path = "./cameleon/cameleon", features = ["libusb"] }
 serialport = "3.3.0"
 nalgebra = "0.26.0"
 rayon = "1.5.1"
 serde = { version = "1.0.130", features = ["derive"] }
 
-com = { path = "../com" }
+#com = { path = "../com" }
 
 egui = { version = "0.27.1" }
 eframe = { version = "0.27.1", default-features = false, features = [
@@ -30,5 +30,5 @@ atomic_float = "1.1.0"
 [profile.release]
 debug = 1
 
-[workspace]
-members = ["./src/gpu"]
+#[workspace]
+#members = ["./src/gpu"]
