@@ -1,37 +1,24 @@
-use std::thread::sleep;
+use std::thread;
 use std::time::Duration;
 use matura::arduino_com::ArduinoCom;
 
-// Example main function for testing
 fn main() {
-    let mut arduino_com = ArduinoCom::new(); // This will now include the 3-second boot delay
-
-    // Keep using the simple "Ping!" Arduino sketch for initial testing to confirm stability
-    // Arduino sketch:
-    // void setup() { Serial.begin(57600); while (!Serial); Serial.println("Arduino: Ready!"); }
-    // void loop() { Serial.println("Arduino: Ping!"); delay(1000); }
-
-    println!("Starting continuous read from Arduino...");
-    loop {
-        // match arduino_com.read_line() {
-        //     s if !s.is_empty() => println!("Received: '{}'", s),
-        //     _ => {
-        //         println!("Received an empty line (likely only \\r\\n was sent)");
-        //     }
-        // }
-        arduino_com.sync();
-        // You might want a small sleep here in the loop if the Arduino sends very slowly
-        // to avoid constant timeouts. Not strictly necessary with 1-sec ping.
-        sleep(Duration::from_millis(1000));
+    let mut com = ArduinoCom::new();
+    let positions = vec![500, 800, 200, 250, 280, 400, 180, 900, 300];
+    let mut total_diff = 0;
+    for pos in positions.iter() {
+        com.send_string(&format!("{}", pos).to_string());
+        thread::sleep(Duration::from_millis(1000));
+        let actual_pos = com.get_pos() as i32;
+        println!("sent {}, actual pos: {}, diff: {}", pos, actual_pos, actual_pos.abs_diff(*pos));
+        total_diff += actual_pos.abs_diff(*pos);
+        // wait until key pressed
+        // println!("Press Enter to continue...");
+        // let mut input = String::new();
+        // std::io::stdin().read_line(&mut input).unwrap();
     }
-
-    let mut arduino_com = matura::arduino_com::ArduinoCom::new();
-    let mut pos = 100;
-    arduino_com.sync();
-    loop {
-        arduino_com.send_string(&format!("{}", pos % 330));
-        pos += 5;
-        //     sleep 150 ms
-        std::thread::sleep(std::time::Duration::from_millis(150));
-    } // loop {}
+    let average = total_diff as f32 / positions.len() as f32; 
+    // we have 1024 steps per 200mm
+    let avg_mm = average * 200.0 / 1024.0;
+    println!("Total difference: {}, avg: {}, {} mm", total_diff, average, avg_mm);
 }

@@ -8,6 +8,8 @@ pub mod arduino_com;
 pub mod ball;
 pub mod compute_rl_coords;
 pub mod detect_player;
+pub mod cam_thread;
+pub mod live_feed;
 
 /// Camera matrix and distortion coefficients from calibration
 const CAMERA_MATRIX: [[f64; 3]; 3] = [

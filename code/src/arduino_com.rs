@@ -22,7 +22,7 @@ impl ArduinoCom {
     pub fn new() -> Self {
         // list all ports and their names
         let ports = serialport::available_ports().expect("Failed to list ports");
-        let mut port_name = "/dev/tty.usbmodem21401".to_string(); // Default, will be overwritten if Arduino found
+        let mut port_name = "/dev/tty.usbmodem1201".to_string(); // Default, will be overwritten if Arduino found
         for port in ports {
             println!("{:?}", port);
             if format!("{:?}", port.port_type).contains("Arduino") {
@@ -72,7 +72,7 @@ impl ArduinoCom {
         }
         writeln!(self.serial, "{}", s).expect("Failed to write to port");
         self.serial.flush().expect("Failed to flush port");
-        println!("Sent: {}", s);
+        // println!("Sent: {}", s);
         self.last_command = s.to_string(); // Update last_command
     }
 
@@ -95,6 +95,21 @@ impl ArduinoCom {
             buffer.push(c);
         }
         buffer
+    }
+
+    pub fn read_line_option(&mut self) -> Option<String> {
+        // read until \n
+        let mut buffer = String::new();
+        loop {
+            let mut buf = [0; 1];
+            self.serial.read_exact(&mut buf).ok()?;
+            let c = buf[0] as char;
+            if c == '\n' {
+                break;
+            }
+            buffer.push(c);
+        }
+        Some(buffer)
     }
 
     pub fn read_everything(&mut self) -> String {
@@ -120,26 +135,44 @@ impl ArduinoCom {
 
     pub fn sync(&mut self) {
         self.send_string("sync");
-        println!("Sent 'sync', waiting for response...");
+        // println!("Sent 'sync', waiting for response...");
 
         // Give Arduino a moment to process the command and send its response
-        sleep(Duration::from_millis(100));
+        sleep(Duration::from_millis(10));
 
         let mut output = "".to_string();
         while !output.starts_with("end") {
             match self.read_line() {
                 line if !line.is_empty() => {
                     output = line.trim().to_string(); // Trim whitespace just in case
-                    println!("SYNC DEBUG: Received: '{}'", output);
+                    // println!("SYNC DEBUG: Received: '{}'", output);
                 }
                 _ => {
-                    println!("SYNC DEBUG: Received an empty line (likely just \\r\\n)");
+                    // println!("SYNC DEBUG: Received an empty line (likely just \\r\\n)");
                     // If you continuously get empty lines and "end" isn't showing,
                     // there might be a problem with the Arduino's output.
                     // Consider adding a safety counter to prevent infinite loops.
                 }
             }
         }
-        println!("Finished syncing");
+        // println!("Finished syncing");
+    }
+    
+    pub fn get_pos(&mut self) -> f32 {
+        self.sync();
+        self.send_string("I");
+        // sleep for 500 ms
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let output = self.read_line();
+        // println!("o: {}", output);
+        // output format:    Pos: 32
+        let pos = output
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse::<f32>()
+            .unwrap();
+        // println!("pos: {}", pos);
+        pos
     }
 }
