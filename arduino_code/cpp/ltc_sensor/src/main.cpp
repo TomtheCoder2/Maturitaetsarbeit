@@ -34,8 +34,8 @@ void loop() {
         if (input.toInt() != 0 || input == "0") {
             int input_int = input.toInt();
             stepper1.target_ltc_value = input_int;
-            Serial.print("Set target_ltc_value to: ");
-            Serial.println(stepper1.target_ltc_value);
+            // Serial.print("Set target_ltc_value to: ");
+            // Serial.println(stepper1.target_ltc_value);
             return;
         }
     }

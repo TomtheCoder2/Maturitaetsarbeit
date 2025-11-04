@@ -159,13 +159,18 @@ impl ArduinoCom {
     }
     
     pub fn get_pos(&mut self) -> f32 {
-        self.sync();
+        self.get_pos_sync(true)
+    }
+
+    pub fn get_pos_sync(&mut self, sync: bool) -> f32 {
+        if sync { self.sync(); }
         self.send_string("I");
         // sleep for 500 ms
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::thread::sleep(std::time::Duration::from_millis(5));
         let output = self.read_line();
         // println!("o: {}", output);
         // output format:    Pos: 32
+        assert!(output.starts_with("Pos:"));
         let pos = output
             .split_whitespace()
             .nth(1)

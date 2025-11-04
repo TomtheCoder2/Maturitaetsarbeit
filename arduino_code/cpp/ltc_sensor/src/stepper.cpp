@@ -15,8 +15,8 @@ void stepper::setup() {
 
 void stepper::loop() {
     // read analog pin A15 and print its value
-    current_ltc_value = analogRead(ltc_analogPin);  // read the input pin
-    float error = (float)(target_ltc_value - current_ltc_value);
+    current_ltc_value = analogRead(ltc_analogPin); // read the input pin
+    float error = (float) (target_ltc_value - current_ltc_value);
     // lets print the error if its less than 20
     if (abs(error) < 20) {
         // Serial.print("ltc: ");
