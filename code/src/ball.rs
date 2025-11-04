@@ -6,7 +6,7 @@ use nalgebra::{clamp, Vector2};
 use std::fmt::{Display, Formatter};
 use std::sync::atomic::AtomicI32;
 
-pub static MAGNITUE_DIFF: AtomicI32 = AtomicI32::new(0);
+pub static MAGNITUE_DIFF: AtomicI32 = AtomicI32::new(20);
 
 pub struct Ball {
     x: u32,
@@ -26,7 +26,7 @@ macro_rules! debug {
 pub type SelectionFn = dyn Fn(u8, u8, u8) -> bool;
 
 pub fn standard_selection(r: u8, g: u8, b: u8) -> bool {
-    (r as i32 + g as i32 + b as i32) > 3 * 30
+    (r as i32 + g as i32 + b as i32) > 128
 }
 
 pub fn read_image(
@@ -146,10 +146,10 @@ pub fn read_image(
     for ball in balls_raw.iter() {
         let x = (ball.sum_x / ball.count) as u32;
         let y = (ball.sum_y / ball.count) as u32;
-        // if x > new_width / 3
-        //     && x < new_width * 3 / 4
-        //     && y > new_height / 3
-        //     && y < new_height * 3 / 4
+        // if x > NEW_WIDTH / 3
+        //     && x < NEW_WIDTH * 3 / 4
+        //     && y > NEW_HEIGHT / 3
+        //     && y < NEW_HEIGHT * 3 / 4
         // {
         // todo: check if this is even right
         let radius = (((ball.max_x - ball.min_x).pow(2) + (ball.max_y - ball.min_y).pow(2)) as f32)
@@ -336,15 +336,15 @@ pub fn find_ball(
                             ball.max_y = y;
                         }
                         found = true;
-                        // let radius = ((ball.max_x - ball.min_x).pow(2)
-                        //     + (ball.max_y - ball.min_y).pow(2) as f32)
+                        // let radius = ((ball.MAX_X - ball.MIN_X).pow(2)
+                        //     + (ball.MAX_Y - ball.MIN_Y).pow(2) as f32)
                         //     .sqrt()
                         //     / 2.;
                         // let min: u32 = 18;
                         // let max: u32 = 25;
                         // // check that the width and height are about equal to the radius
-                        // if ((ball.max_x - ball.min_x) as f32).powi(2) * 2 < radius
-                        //     || ((ball.max_y - ball.min_y) as f32).powi(2) * 2 < radius
+                        // if ((ball.MAX_X - ball.MIN_X) as f32).powi(2) * 2 < radius
+                        //     || ((ball.MAX_Y - ball.MIN_Y) as f32).powi(2) * 2 < radius
                         // {
                         //     continue;
                         // }
@@ -385,10 +385,10 @@ pub fn find_ball(
     for ball in balls_raw.iter() {
         let x = (ball.sum_x / ball.count) as u32;
         let y = (ball.sum_y / ball.count) as u32;
-        // if x > new_width / 3
-        //     && x < new_width * 3 / 4
-        //     && y > new_height / 3
-        //     && y < new_height * 3 / 4
+        // if x > NEW_WIDTH / 3
+        //     && x < NEW_WIDTH * 3 / 4
+        //     && y > NEW_HEIGHT / 3
+        //     && y < NEW_HEIGHT * 3 / 4
         // {
         // todo: check if this is even right
         let radius = (((ball.max_x - ball.min_x).pow(2) + (ball.max_y - ball.min_y).pow(2)) as f32)
@@ -653,7 +653,7 @@ impl BallComp {
         //     "prediction: {:?}, ball: {:?}, diff: {:?}",
         //     prediction, ball, diff
         // );
-        if diff.magnitude() > 20. {
+        if diff.magnitude() / self.velocity.magnitude() * 2000. > MAGNITUE_DIFF.load(std::sync::atomic::Ordering::Relaxed) as f32 {
             let diff = self.positions.last().unwrap().0 - ball;
             let new_velocity = diff / (self.positions.last().unwrap().1 - time);
             // println!(
@@ -666,7 +666,7 @@ impl BallComp {
         } else {
             self.positions.push((ball, time));
             // max 10 samples
-            if self.positions.len() > 10 {
+            if self.positions.len() > 200 {
                 self.positions.remove(0);
             }
             // println!("Length of positions: {}", self.positions.len());

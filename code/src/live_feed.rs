@@ -52,6 +52,7 @@ pub enum Command {
         min_pixel: i32,
         max_pixel: i32,
     },
+    PlayerXCoord(i32)
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum Selection {
@@ -132,6 +133,7 @@ pub struct App {
     max_pixel: i32,
     timing_offset: f32,
     magnitude_diff: i32,
+    player_x_coord: i32,
 }
 
 const POS: [i32; 7] = [50, 100, 150, 200, 250, 300, 350];
@@ -189,6 +191,7 @@ impl Default for App {
             max_pixel: 350,
             timing_offset: 0.25,
             magnitude_diff: 20,
+            player_x_coord: 44,
         }
     }
 }
@@ -249,7 +252,7 @@ impl eframe::App for App {
             let new_width =
                 (image.width() as f32 / image.height() as f32 * new_height as f32) as u32;
             // let mut image =
-            // image.resize(new_width, new_height, image::imageops::FilterType::Nearest);
+            // image.resize(NEW_WIDTH, NEW_HEIGHT, image::imageops::FilterType::Nearest);
             let mut original_undistorted_image = image.clone();
             let unmodified_original_undistorted_image = image.clone();
             let original_image = DynamicImage::ImageRgb8(
@@ -451,11 +454,15 @@ impl eframe::App for App {
 
             let min_pixel_color = Color32::from_rgb(255, 165, 0);
             let max_pixel_color = Color32::from_rgb(0, 255, 0);
+            let player_x_coord_color = Color32::from_rgb(0, 0, 255);
             // if show min max pixel, draw a line in the color min_pixeL_color at y = min_pixel and max_pixel with max_pixel_color
             if self.show_min_max_pixel {
                 for x in 0..image.width() {
                     image.put_pixel(x, self.min_pixel as u32, image::Rgba(min_pixel_color.to_array()));
                     image.put_pixel(x, self.max_pixel as u32, image::Rgba(max_pixel_color.to_array()));
+                }
+                for y in 0..image.height() {
+                    image.put_pixel(self.player_x_coord as u32, y, image::Rgba(player_x_coord_color.to_array()));
                 }
             }
 
@@ -681,11 +688,18 @@ impl eframe::App for App {
                 ui.checkbox(&mut self.show_selection, "Show Selection");
                 ui.checkbox(&mut self.overlay_ball, "Overlay Ball Detection");
                 ui.checkbox(&mut self.overlay_ball_prediction, "Overlay Ball Prediction");
+                // ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
+            });
+            ui.horizontal(|ui| {
+                ui.label("\t");
                 ui.label("Magnitude Diff:");
                 if ui.add(egui::DragValue::new(&mut self.magnitude_diff).speed(1)).changed() {
                     MAGNITUE_DIFF.store(self.magnitude_diff, Ordering::Relaxed);
                 }
-                // ui.checkbox(&mut self.show_player_predicition, "Show Player Prediction");
+                ui.colored_label(player_x_coord_color,"Player X coord:");
+                if ui.add(egui::DragValue::new(&mut self.player_x_coord).speed(1.)).changed() {
+                    self.sender.send(Command::PlayerXCoord(self.player_x_coord)).unwrap();
+                }
             });
             ui.horizontal(|ui|{
                 ui.label("Player:");
@@ -817,7 +831,9 @@ impl eframe::App for App {
 
     /// Called by the frame work to save state before shutdown.
     /// On Windows its saved here: C:\Users\UserName\AppData\Roaming\Phoenix\data\app.ron
+    /// On MacOS its saved here: ~/Library/Application Support/Live-Feed/app.ron
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        println!("Saving...");
         // self.version = VERSION.to_string();
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
@@ -863,6 +879,7 @@ impl App {
         } else {
             app.sender.send(Command::Start).unwrap();
         }
+        app.sender.send(Command::PlayerXCoord(app.player_x_coord)).unwrap();
         app
     }
 }
@@ -872,7 +889,7 @@ pub fn run_gui(tx: Sender<Command>) {
     eframe::run_native(
         "Live Feed",
         Default::default(),
-        Box::new(|cc| Box::new(App::new(tx, cc))),
+        Box::new(|cc| Ok(Box::new(App::new(tx, cc)))),
     )
         .expect("Failed to run Camera");
 }

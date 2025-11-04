@@ -10,6 +10,7 @@ pub mod compute_rl_coords;
 pub mod detect_player;
 pub mod cam_thread;
 pub mod live_feed;
+pub mod plot;
 
 /// Camera matrix and distortion coefficients from calibration
 const CAMERA_MATRIX: [[f64; 3]; 3] = [
@@ -103,17 +104,17 @@ pub fn undistort_image(img: &[u8], num_threads: u32, width: u32, height: u32) ->
     //     (width as f64 - 1.0, height as f64 - 1.0),
     // ];
 
-    // let mut min_x = f64::MAX;
-    // let mut max_x = f64::MIN;
-    // let mut min_y = f64::MAX;
-    // let mut max_y = f64::MIN;
+    // let mut MIN_X = f64::MAX;
+    // let mut MAX_X = f64::MIN;
+    // let mut MIN_Y = f64::MAX;
+    // let mut MAX_Y = f64::MIN;
 
     // for &(x, y) in &corners {
     //     let (distorted_x, distorted_y) = distort_coords(x, y, fx, fy, cx, cy);
-    //     min_x = min_x.min(distorted_x);
-    //     max_x = max_x.max(distorted_x);
-    //     min_y = min_y.min(distorted_y);
-    //     max_y = max_y.max(distorted_y);
+    //     MIN_X = MIN_X.min(distorted_x);
+    //     MAX_X = MAX_X.max(distorted_x);
+    //     MIN_Y = MIN_Y.min(distorted_y);
+    //     MAX_Y = MAX_Y.max(distorted_y);
     // }
     let side_margin = 60i32;
     let top_margin = 10i32;
@@ -123,14 +124,14 @@ pub fn undistort_image(img: &[u8], num_threads: u32, width: u32, height: u32) ->
     let max_y = height as i32 + top_margin;
 
     // println!(
-    //     "min_x: {}, max_x: {}, min_y: {}, max_y: {}",
-    //     min_x, max_x, min_y, max_y
+    //     "MIN_X: {}, MAX_X: {}, MIN_Y: {}, MAX_Y: {}",
+    //     MIN_X, MAX_X, MIN_Y, MAX_Y
     // );
 
     // Step 2: Create the new undistorted image with a larger size
     let new_width = (max_x - min_x) as u32;
     let new_height = (max_y - min_y) as u32;
-    println!("new_width: {}, new_height: {}", new_width, new_height);
+    println!("NEW_WIDTH: {}, NEW_HEIGHT: {}", new_width, new_height);
 
     let mut undistorted_img = RgbImage::new(new_width, new_height);
     let ptr = undistorted_img.as_mut_ptr();
@@ -140,7 +141,7 @@ pub fn undistort_image(img: &[u8], num_threads: u32, width: u32, height: u32) ->
     // Step 3: Process each pixel in parallel to undistort the image
     let block_size = (new_height as f32 / num_threads as f32).ceil() as u32;
 
-    // let mut precomputation_table = Mutex::new(vec![None; (new_width * new_height) as usize]);
+    // let mut precomputation_table = Mutex::new(vec![None; (NEW_WIDTH * NEW_HEIGHT) as usize]);
 
     (0..num_threads).into_par_iter().for_each(|thread_n| {
         let start_y = thread_n * block_size;
@@ -194,7 +195,7 @@ pub fn undistort_image(img: &[u8], num_threads: u32, width: u32, height: u32) ->
                             .add((x as usize) * 3)
                             .copy_from_nonoverlapping(pixel[0].as_ptr(), 3);
                     }
-                    // precomputation_table.lock().unwrap()[((y * new_width + x) as usize)] = Some(index);
+                    // precomputation_table.lock().unwrap()[((y * NEW_WIDTH + x) as usize)] = Some(index);
                 }
             }
         }
@@ -413,8 +414,8 @@ pub fn gen_table_old(width: u32, height: u32) -> Vec<(usize, i32)> {
     let max_y = 1200f64;
 
     // println!(
-    //     "min_x: {}, max_x: {}, min_y: {}, max_y: {}",
-    //     min_x, max_x, min_y, max_y
+    //     "MIN_X: {}, MAX_X: {}, MIN_Y: {}, MAX_Y: {}",
+    //     MIN_X, MAX_X, MIN_Y, MAX_Y
     // );
 
     // Step 2: Create the new undistorted image with a larger size

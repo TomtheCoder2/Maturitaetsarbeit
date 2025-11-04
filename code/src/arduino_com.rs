@@ -22,10 +22,10 @@ impl ArduinoCom {
     pub fn new() -> Self {
         // list all ports and their names
         let ports = serialport::available_ports().expect("Failed to list ports");
-        let mut port_name = "/dev/tty.usbmodem1201".to_string(); // Default, will be overwritten if Arduino found
+        let mut port_name = "/dev/tty.usbmodem1401".to_string(); // Default, will be overwritten if Arduino found
         for port in ports {
             println!("{:?}", port);
-            if format!("{:?}", port.port_type).contains("Arduino") {
+            if format!("{:?}", port.port_type).contains("Arduino") || port.port_name.contains("usbmodem") {
                 println!("Arduino found on port: {:?}", port.port_name);
                 port_name = port.port_name;
             }

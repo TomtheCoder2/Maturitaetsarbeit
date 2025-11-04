@@ -1,0 +1,37 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![expect(rustdoc::missing_crate_level_docs)] // it's an example
+
+use eframe::egui;
+use egui_plot::{Legend, Line, Plot, PlotPoints};
+
+#[derive(Default)]
+pub struct PlotApp {
+    pub insert_order: bool,
+    pub graph: Vec<[f64; 2]>,
+    pub graph2: Vec<[f64; 2]>,
+    pub graph3: Vec<[f64; 2]>,
+}
+
+impl eframe::App for PlotApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label("If checked the legend will follow the order as the curves are inserted");
+            ui.checkbox(&mut self.insert_order, "Insert order");
+
+            Plot::new("My Plot")
+                .legend(Legend::default().follow_insertion_order(self.insert_order))
+                .show(ui, |plot_ui| {
+                    plot_ui.line(Line::new(
+                        "3rd Curve",
+                        PlotPoints::from(self.graph3.clone()),
+                    ));
+                    plot_ui.line(Line::new("1st Curve", PlotPoints::from(self.graph.clone())));
+                    plot_ui.line(Line::new(
+                        "2nd Curve",
+                        PlotPoints::from(self.graph2.clone()),
+                    ));
+                });
+            // Remember the position of the plot
+        });
+    }
+}

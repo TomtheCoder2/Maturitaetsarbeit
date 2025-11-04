@@ -1,5 +1,5 @@
 use crate::arduino_com::ArduinoCom;
-use crate::ball::{standard_selection, BallComp};
+use crate::ball::{standard_selection, BallComp, MAGNITUE_DIFF};
 use crate::live_feed::Command::*;
 use crate::live_feed::{subtract_image, Command, Selection, ACTUAL_PLAYER_POSITION, FOLLOWBALL, FPS, IMAGE_BUFFER, IMAGE_BUFFER_UNDISTORTED, PAUSEPLAYER, PAUSESHOOTING, TIMING_OFFSET};
 use cameleon::u3v::{ControlHandle, StreamHandle};
@@ -68,14 +68,33 @@ fn create_color_image_from_rgb8(rgb8_data: &[u8], width: usize, height: usize) -
     ColorImage::from_rgba_unmultiplied([width, height], &pixels)
 }
 
-pub struct CamThread {}
+pub struct CamThread {
+    // todo: migrate all variables here
+    player_x_coord: i32,
+}
+
+pub const WIDTH: u32 = 728;
+pub const HEIGHT: u32 = 544;
+pub const LEFT_MARGIN: i32 = 100;
+pub const RIGHT_MARGIN: i32 = 100;
+pub const TOP_MARGIN: i32 = 0;
+pub const BOTTOM_MARGIN: i32 = 28;
+
+pub const MIN_X: i32 = -LEFT_MARGIN;
+pub const MAX_X: i32 = WIDTH as i32 + RIGHT_MARGIN;
+pub const MIN_Y: i32 = -TOP_MARGIN;
+pub const MAX_Y: i32 = HEIGHT as i32 + BOTTOM_MARGIN;
+pub const NEW_WIDTH: u32 = (MAX_X - MIN_X) as u32;
+pub const NEW_HEIGHT: u32 = (MAX_Y - MIN_Y) as u32;
 
 impl CamThread {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            player_x_coord: 44,
+        }
     }
 
-    pub fn start(self) -> Sender<Command> {
+    pub fn start(mut self) -> Sender<Command> {
         // Enumerates all cameras connected to the host.
         let mut cameras = cameleon::u3v::enumerate_cameras().unwrap();
         let (tx, rx): (Sender<Command>, Receiver<Command>) = mpsc::channel();
@@ -119,21 +138,10 @@ impl CamThread {
             let mut paused = false;
 
             // undistort image
-            let width = 728;
-            let height = 544;
-            let left_margin = 100;
-            let right_margin = 100;
-            let top_margin = 0;
-            let bottom_margin = 28;
-            let min_x = -left_margin;
-            let max_x = width as i32 + right_margin;
-            let min_y = -top_margin;
-            let max_y = height as i32 + bottom_margin;
-            let new_width = (max_x - min_x) as u32;
-            let new_height = (max_y - min_y) as u32;
-            println!("old width: {}, old height: {}", width, height);
-            println!("new width: {}, new height: {}", new_width, new_height);
-            let precompute = crate::gen_table(width, height, new_width, new_height, min_x, min_y);
+            
+            println!("old width: {}, old height: {}", WIDTH, HEIGHT);
+            println!("new width: {}, new height: {}", NEW_WIDTH, NEW_HEIGHT);
+            let precompute = crate::gen_table(WIDTH, HEIGHT, NEW_WIDTH, NEW_HEIGHT, MIN_X, MIN_Y);
             // let rl_comp = matura::compute_rl_coords::RLCompute::new();
 
             let raw = load_raw();
@@ -151,11 +159,11 @@ impl CamThread {
             let mut arduino_com = crate::arduino_com::ArduinoCom::new();
 
             let mut buffer = crate::live_feed::IMAGE_BUFFER_UNDISTORTED.lock().unwrap();
-            buffer.0 = new_width;
-            buffer.1 = new_height;
+            buffer.0 = NEW_WIDTH;
+            buffer.1 = NEW_HEIGHT;
             drop(buffer);
 
-            let mut undistorted_image = vec![0u8; (new_width * new_height * 3) as usize];
+            let mut undistorted_image = vec![0u8; (NEW_WIDTH * NEW_HEIGHT * 3) as usize];
             let mut ball_comp = BallComp::new();
             let mut shoot_time = 0.;
             // whether the ball has already been shot at time shoot_time
@@ -418,6 +426,9 @@ impl CamThread {
                             min_pixel = min;
                             max_pixel = max;
                         }
+                        PlayerXCoord(coord) => {
+                            self.player_x_coord = coord;
+                        }
                     }
                 }
                 if paused {
@@ -428,6 +439,7 @@ impl CamThread {
                 let elapsed = t0.elapsed();
                 let fps = frame_counter as f64 / elapsed.as_secs_f64();
                 let delta = t0_delta.elapsed();
+                // println!("delta: {:?}, fps: {:.3}", delta, 1. / delta.as_secs_f64());
                 t0_delta = std::time::Instant::now();
                 if frame_counter % 1000 == 0 {
                     // println!("avg fps: {:.2}", fps);
@@ -473,15 +485,15 @@ impl CamThread {
                             image,
                             &mut undistorted_image,
                             &precompute,
-                            new_width,
-                            new_height,
+                            NEW_WIDTH,
+                            NEW_HEIGHT,
                         );
                         let undistorted_clone = undistorted_image.clone();
                         let ball_comp_t0 = std::time::Instant::now();
                         // todo rever this
                         subtract_image(&mut undistorted_image, raw_image);
                         // let u_image = DynamicImage::ImageRgb8(
-                        // ImageBuffer::from_raw(new_width, new_height, undistorted_image.clone())
+                        // ImageBuffer::from_raw(NEW_WIDTH, NEW_HEIGHT, undistorted_image.clone())
                         // .unwrap(),
                         // );
                         // u_image.save("undistorted_image.png");
@@ -489,8 +501,8 @@ impl CamThread {
                         // std::process::exit(0);
                         let ball = crate::ball::find_ball(
                             undistorted_image.as_slice(),
-                            new_width as u32,
-                            new_height as u32,
+                            NEW_WIDTH as u32,
+                            NEW_HEIGHT as u32,
                             &mut ball_comp,
                             elapsed.as_secs_f32(),
                             &selection_fn,
@@ -533,7 +545,7 @@ impl CamThread {
 
                         if ball_comp.velocity.x < 0.0 && ball_comp.velocity.magnitude() > 20. {
                             // the ball goes towards the goal
-                            let intersection = ball_comp.intersection_x(44.);
+                            let intersection = ball_comp.intersection_x(self.player_x_coord as f32);
                             if let Some(intersection) = intersection {
                                 // println!("intersection: {:?}", intersection);
                                 let t = intersection.1;

@@ -79,7 +79,7 @@ impl eframe::App for App {
             let new_width = (max_x - min_x) as u32;
             let new_height = (max_y - min_y) as u32;
             // println!("old width: {}, old height: {}", width, height);
-            // println!("new width: {}, new height: {}", new_width, new_height);
+            // println!("new width: {}, new height: {}", NEW_WIDTH, NEW_HEIGHT);
             let precompute = matura::gen_table(width, height, new_width, new_height, min_x, min_y);
             let mut image = vec![0u8; (new_width * new_height * 3) as usize];
             matura::undistort_image_table(&img, &mut image, &precompute, new_width, new_height);
