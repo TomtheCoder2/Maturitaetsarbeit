@@ -1,7 +1,10 @@
 use crate::arduino_com::ArduinoCom;
-use crate::ball::{standard_selection, BallComp, MAGNITUE_DIFF};
+use crate::ball::{standard_selection, BallComp};
 use crate::live_feed::Command::*;
-use crate::live_feed::{subtract_image, Command, Selection, ACTUAL_PLAYER_POSITION, FOLLOWBALL, FPS, IMAGE_BUFFER, IMAGE_BUFFER_UNDISTORTED, PAUSEPLAYER, PAUSESHOOTING, TIMING_OFFSET};
+use crate::live_feed::{
+    subtract_image, Command, Selection, FOLLOWBALL, FPS, IMAGE_BUFFER,
+    IMAGE_BUFFER_UNDISTORTED, PAUSEPLAYER, PAUSESHOOTING, TIMING_OFFSET,
+};
 use cameleon::u3v::{ControlHandle, StreamHandle};
 use cameleon::Camera;
 use egui::ColorImage;
@@ -89,9 +92,7 @@ pub const NEW_HEIGHT: u32 = (MAX_Y - MIN_Y) as u32;
 
 impl CamThread {
     pub fn new() -> Self {
-        Self {
-            player_x_coord: 44,
-        }
+        Self { player_x_coord: 44 }
     }
 
     pub fn start(mut self) -> Sender<Command> {
@@ -125,10 +126,10 @@ impl CamThread {
         // get_value(&mut camera, "DeviceLinkThroughputLimitMode".to_string());
 
         // Start streaming. Channel capacity is set to 3.
-        let mut payload_rx = camera.start_streaming(3).unwrap();
+        let payload_rx = camera.start_streaming(3).unwrap();
 
         let t0_first_thread = std::time::Instant::now();
-        let t0_second_thread = std::time::Instant::now();
+        // let t0_second_thread = std::time::Instant::now();
 
         thread::spawn(move || {
             let t0 = t0_first_thread;
@@ -138,7 +139,7 @@ impl CamThread {
             let mut paused = false;
 
             // undistort image
-            
+
             println!("old width: {}, old height: {}", WIDTH, HEIGHT);
             println!("new width: {}, new height: {}", NEW_WIDTH, NEW_HEIGHT);
             let precompute = crate::gen_table(WIDTH, HEIGHT, NEW_WIDTH, NEW_HEIGHT, MIN_X, MIN_Y);
@@ -154,6 +155,7 @@ impl CamThread {
                 .flatten()
                 .collect::<Vec<u8>>();
             let mut raw_image = raw_image.as_slice();
+            let mut raw_image_owned_boxed_slice: Box<[u8]>; // Declared in outer scope to ensure longevity.
 
             let mut last_command = Instant::now();
             let mut arduino_com = crate::arduino_com::ArduinoCom::new();
@@ -169,7 +171,6 @@ impl CamThread {
             // whether the ball has already been shot at time shoot_time
             let mut shot = true;
             let mut time_since_catch = Instant::now();
-            let mut pause_player = false;
             let mut moved_to_center = true;
 
             let mut player_calibration_positions = vec![];
@@ -178,25 +179,19 @@ impl CamThread {
             let mut min_radius @ mut max_radius = 0.;
 
             // functions
-            const MIN_MOTOR: i32 = 0;
-            const MAX_MOTOR: i32 = 400;
+            const _MIN_MOTOR: i32 = 0;
+            const _MAX_MOTOR: i32 = 400;
             let mut min_pixel = 226;
             let mut max_pixel = 350;
             fn move_y(
-                x: f32,
-                o_y: f32,
+                y: f32,
                 arduino_com: &mut ArduinoCom,
                 last_command: &mut Instant,
-                // rl_comp: &RLCompute,
-                player_0: i32,
-                player_target: &mut i32,
-                paused_player: bool,
                 min_pixel: i32,
                 max_pixel: i32,
             ) {
-                *player_target = o_y as i32;
+                // *player_target = o_y as i32;
                 // let y = rl_comp.transform_point((x, o_y)).1 + player_0 as f32;
-                let y = o_y;
                 // println!("oy: {o_y}, y: {y}, 450 - y: {}", 450. - y);
                 //
                 // motor, pixel y
@@ -229,7 +224,10 @@ impl CamThread {
                     // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
                     let y = y as f64;
                     // cnc shield:
-                    let x = -0.0000609070 * y.powi(3) + 0.0577279513 * y.powi(2) + -11.0721181144 * y.powi(1) + 242.7078559049;
+                    let x = -0.0000609070 * y.powi(3)
+                        + 0.0577279513 * y.powi(2)
+                        + -11.0721181144 * y.powi(1)
+                        + 242.7078559049;
                     // rs485:
                     // let x = 0.0001587715 * y.powi(3) + -0.1268654294 * y.powi(2) + 30.4151445206 * y.powi(1) + -1892.1674459350;
 
@@ -246,8 +244,6 @@ impl CamThread {
             fn move_center(
                 arduino_com: &mut ArduinoCom,
                 last_command: &mut Instant,
-                player_0: i32,
-                paused_player: bool,
                 min_pixel: i32,
                 max_pixel: i32,
             ) {
@@ -256,15 +252,11 @@ impl CamThread {
                     if last_command.elapsed().as_secs_f32() > 0.05 {
                         // println!("Moving to center");
                         // arduino_com.send_string(&format!("{}", 212 as i32));
-                        arduino_com.send_string(&"check 10".to_string());
+                        // arduino_com.send_string(&"check 10".to_string());
                         move_y(
-                            0.,
                             y,
                             arduino_com,
                             last_command,
-                            player_0,
-                            &mut 0,
-                            paused_player,
                             min_pixel,
                             max_pixel,
                         );
@@ -303,22 +295,21 @@ impl CamThread {
                         }
                         ReloadRaw => {
                             let raw = load_raw();
-                            let raw_image1 = raw
+                            raw_image_owned_boxed_slice = raw
                                 .as_raw()
                                 .to_vec()
                                 .chunks(4)
                                 .map(|x| x[0..3].to_vec())
                                 .flatten()
-                                .collect::<Vec<u8>>();
-                            let raw_image1 = raw_image1.as_slice();
+                                .collect::<Vec<u8>>().into_boxed_slice();
+                            raw_image = &raw_image_owned_boxed_slice;
+                            // let raw_image1 = raw_image1.as_slice();
                             // raw_image = raw_image1.clone();
                         }
                         MoveCenter => {
                             move_center(
                                 &mut arduino_com,
                                 &mut last_command,
-                                0,
-                                pause_player,
                                 min_pixel,
                                 max_pixel,
                             );
@@ -437,7 +428,7 @@ impl CamThread {
                 frame_counter += 1;
                 // show rolling fps average
                 let elapsed = t0.elapsed();
-                let fps = frame_counter as f64 / elapsed.as_secs_f64();
+                // let fps = frame_counter as f64 / elapsed.as_secs_f64();
                 let delta = t0_delta.elapsed();
                 // println!("delta: {:?}, fps: {:.3}", delta, 1. / delta.as_secs_f64());
                 t0_delta = std::time::Instant::now();
@@ -451,10 +442,10 @@ impl CamThread {
                 let payload = match payload_rx.recv_blocking() {
                     Ok(payload) => payload,
                     Err(e) => {
-                        // println!(
-                        //     "[{}]Payload receive error: {e}",
-                        //     chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
-                        // );
+                        println!(
+                            "[{}]Payload receive error: {e}",
+                            chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                        );
                         continue;
                     }
                 };
@@ -463,13 +454,11 @@ impl CamThread {
                 //     payload.id(),
                 //     payload.timestamp()
                 // );
-                let mut player_0 = 0;
-                let mut player_target = 0;
-                let mut current_player_pos = 0;
-                if let Some(image_info) = payload.image_info() {
+                // let mut current_player_pos;
+                if let Some(_image_info) = payload.image_info() {
                     // println!("{:?}\n", image_info);
-                    let width = image_info.width;
-                    let height = image_info.height;
+                    // let width = image_info.width;
+                    // let height = image_info.height;
 
                     let image = payload.image();
                     if let Some(image) = image {
@@ -516,32 +505,6 @@ impl CamThread {
                                 elapsed_ball_comp.as_secs_f32() * 1000.0
                             );
                         }
-                        // println!(
-                        // "ball_comp: {:.2}ms",
-                        // elapsed_ball_comp.as_secs_f32() * 1000.0
-                        // );
-                        player_target = ball.1 as i32;
-                        let actual_player_pos = ACTUAL_PLAYER_POSITION.lock().unwrap().clone();
-                        if !actual_player_pos.3
-                            // && actual_player_pos.0 != 0
-                            && actual_player_pos.1 != 0
-                            && player_target != 0
-                            && last_command.elapsed().as_secs_f32() > 0.1
-                            && player_target as f32 > 236.
-                            && (player_target as f32) < 345.
-                        {
-                            // so we know that the player is currently at actual_player_pos, but it thinks its at player_target
-                            // example: ball: 450, actual: 400, target: 450 -> player_0 = 50
-                            player_0 = player_target - actual_player_pos.1 as i32;
-                            current_player_pos = actual_player_pos.1;
-                            let mov = ((player_target - actual_player_pos.1 as i32) as f32 * 2.35)
-                                as i32
-                                / 3;
-                            // println!("corrected position 0: actual_player_pos: {:?}, player_target: {}, player_0: {}, mov: {}", actual_player_pos, player_target, player_0, mov);
-                            ACTUAL_PLAYER_POSITION.lock().unwrap().3 = true;
-                            // arduino_com.send_string(&format!("{}", -mov as i32));
-                            // last_command = Instant::now();
-                        }
 
                         if ball_comp.velocity.x < 0.0 && ball_comp.velocity.magnitude() > 20. {
                             // the ball goes towards the goal
@@ -559,14 +522,9 @@ impl CamThread {
                                 let intersection = intersection.0;
                                 if !FOLLOWBALL.load(Ordering::Relaxed) {
                                     move_y(
-                                        intersection.x,
                                         intersection.y,
                                         &mut arduino_com,
                                         &mut last_command,
-                                        // &rl_comp,
-                                        player_0,
-                                        &mut player_target,
-                                        pause_player,
                                         min_pixel,
                                         max_pixel,
                                     );
@@ -581,8 +539,6 @@ impl CamThread {
                                     move_center(
                                         &mut arduino_com,
                                         &mut last_command,
-                                        player_0,
-                                        pause_player,
                                         min_pixel,
                                         max_pixel,
                                     );
@@ -595,8 +551,6 @@ impl CamThread {
                                 move_center(
                                     &mut arduino_com,
                                     &mut last_command,
-                                    player_0,
-                                    pause_player,
                                     min_pixel,
                                     max_pixel,
                                 );
@@ -630,13 +584,9 @@ impl CamThread {
                         }
                         if FOLLOWBALL.load(Ordering::Relaxed) {
                             move_y(
-                                ball.0 as f32,
                                 ball.1 as f32,
                                 &mut arduino_com,
                                 &mut last_command,
-                                0,
-                                &mut player_target,
-                                pause_player,
                                 min_pixel,
                                 max_pixel,
                             );

@@ -1,5 +1,4 @@
-use image::GenericImageView;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
 pub struct PythonScript {

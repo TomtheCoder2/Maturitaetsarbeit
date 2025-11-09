@@ -10,7 +10,7 @@ use matura::live_feed::subtract_image;
 use matura::plot::PlotApp;
 
 fn main() {
-    let test_folder = "./recording_4";
+    let test_folder = "./recording_3";
     // lets read all images from the folder
     let mut files = std::fs::read_dir(test_folder)
         .unwrap()
@@ -41,15 +41,15 @@ fn main() {
         .map(|x| x[0..3].to_vec())
         .flatten()
         .collect::<Vec<u8>>();
-    let mut raw_image = raw_image.as_slice();
+    let raw_image = raw_image.as_slice();
     let mut undistorted_image = vec![0u8; (NEW_WIDTH * NEW_HEIGHT * 3) as usize];
     // let mut original_undistorted_image = DynamicImage::new(NEW_WIDTH, NEW_HEIGHT, ColorType::Rgb8);
     let mut ball_comp = BallComp::new();
-    let mut selection_fn: Box<dyn Fn(u8, u8, u8) -> bool> = Box::new(standard_selection);
+    let selection_fn: Box<dyn Fn(u8, u8, u8) -> bool> = Box::new(standard_selection);
     let min_radius = 10.;
     let max_radius = 20.;
     let player_x_coord = 30;
-    let start = std::time::Instant::now();
+    // let start = std::time::Instant::now();
     let pb = ProgressBar::new(files.len() as u64).with_style(
         ProgressStyle::with_template(
             "[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
@@ -59,16 +59,18 @@ fn main() {
     );
     let mut overlay_images = vec![];
     let mut intersections = vec![];
-    let mut actual_intersection = 0.;
+    // actual intersection point (y, time)
+    let mut actual_intersection = (0., 0.);
     let mut ball_positions = vec![];
     let mut latest_prediction = 0;
     let mut elapsed_find_total = 0.;
     let file_number = files.len();
+    let mut virtual_time = 0.;
     for file in files {
         pb.inc(1);
         // read file as image
         let image = image::open(&file).unwrap().to_rgb8();
-        let (width, height) = image.dimensions();
+        // let (width, height) = image.dimensions();
         let image = image.to_vec();
 
         matura::undistort_image_table(
@@ -85,59 +87,51 @@ fn main() {
 
         subtract_image(&mut undistorted_image, raw_image);
 
-        let elapsed = start.elapsed();
         let t0 = std::time::Instant::now();
-        let ball_t = matura::ball::find_ball(
-            undistorted_image.as_slice(),
-            NEW_WIDTH as u32,
-            NEW_HEIGHT as u32,
-            &mut ball_comp,
-            elapsed.as_secs_f32(),
-            &selection_fn,
-            min_radius,
-            max_radius,
-        );
         let elapsed_find = t0.elapsed();
         elapsed_find_total += elapsed_find.as_secs_f32();
-        let time = start.elapsed().as_secs_f32();
         let mut undistorted_dyn_image = DynamicImage::ImageRgb8(
             ImageBuffer::from_raw(NEW_WIDTH, NEW_HEIGHT, undistorted_image.clone()).unwrap(),
         );
         // let mut original_undistorted_image = undistorted_dyn_image.clone();
-        let _ = ball::read_image_vis(
+        let ball_t = ball::read_image_vis(
             &mut undistorted_dyn_image,
             &mut original_undistorted_image,
             &mut ball_comp,
-            time,
+            virtual_time,
             &selection_fn,
             min_radius,
             max_radius,
             true,
         );
+        virtual_time += 1. / 149.;
         overlay_images.push(original_undistorted_image.clone());
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, Debug)]
         struct Ball {
             x: i32,
             y: i32,
-            radius: f32,
+            _radius: f32,
         }
-        let mut ball = Ball {
+        let ball = Ball {
             x: ball_t.0,
             y: ball_t.1,
-            radius: ball_t.2,
+            _radius: ball_t.2,
         };
         if ball_t != (-1, -1, -1.) {
             // println!(
             //     "Found ball at ({}, {}), radius: {:.2} in file {:?}",
             //     ball.x, ball.y, ball.radius, file
             // );
-            ball_positions.push(ball);
+            ball_positions.push((ball, virtual_time));
             // lets see where the ball will hit the player x coordinate
             let intersection = ball_comp.intersection_x(player_x_coord as f32);
             if let Some(intersection) = intersection {
                 if ball_comp.velocity.x < 0.0 && ball_comp.velocity.magnitude() > 20. {
-                    println!("intersection: {:?}", intersection);
-                    intersections.push(intersection);
+                    println!(
+                        "intersection: {:?}",
+                        (intersection.0, intersection.1 + virtual_time)
+                    );
+                    intersections.push((ball, (intersection.0, intersection.1 + virtual_time)));
                 }
             }
         } else {
@@ -150,44 +144,58 @@ fn main() {
     }
     pb.finish_with_message("Processed all images");
     ball_positions.sort_by(|b1, b2| {
-        b1.x.abs_diff(player_x_coord)
-            .cmp(&b2.x.abs_diff(player_x_coord))
+        b1.0.x
+            .abs_diff(player_x_coord)
+            .cmp(&b2.0.x.abs_diff(player_x_coord))
     });
     if let Some(closest_ball) = ball_positions.first() {
-        actual_intersection = closest_ball.y as f32;
+        actual_intersection = (closest_ball.0.y as f32, closest_ball.1 as f32);
         println!(
-            "Actual intersection at y = {:.2}, x = {:.2}",
-            actual_intersection, closest_ball.x
+            "Actual intersection at y = {:.2}, x = {:.2} at time {:.3} s",
+            actual_intersection.0, closest_ball.0.x, closest_ball.1
         );
     } else {
         println!("No ball positions recorded.");
     }
     println!("intersections: {:?}", intersections);
     let mut error = 0;
+    let mut time_error = 0.;
     for intersection in &intersections {
-        error += (intersection.0.y - actual_intersection).abs() as u32;
+        let intersection = intersection.1;
+        error += (intersection.0.y - actual_intersection.0).abs() as u32;
+        time_error += (intersection.1 - actual_intersection.1).abs();
     }
     let avg_error = error as f32 / intersections.len() as f32;
+    let avg_time_error = time_error / intersections.len() as f32;
     // WIDTH in irl is 700mm
     let avg_error_mm = avg_error * (700.0 / NEW_WIDTH as f32);
     println!(
-        "Average intersection error: {:.2} pixels, {:.2} mm",
-        avg_error, avg_error_mm
+        "Average intersection error: {:.2} pixels, {:.2} mm, Average time error: {:.3} s",
+        avg_error, avg_error_mm, avg_time_error
     );
 
-    let error_latest = (latest_prediction as f32 - actual_intersection).abs();
+    let error_latest = (latest_prediction as f32 - actual_intersection.0).abs();
     let error_latest_mm = error_latest * (700.0 / NEW_WIDTH as f32);
     println!(
         "Latest prediction error: {:.2} pixels, {:.2} mm",
         error_latest, error_latest_mm
     );
 
-    let plot_data = intersections
+    let _plot_data = intersections
         .iter()
         .map(|p| {
             [
-                p.1 as f64 * (700.0 / NEW_WIDTH as f64),
-                (p.0.y as f64 - actual_intersection as f64).abs(),
+                p.0.x as f64 * (700.0 / NEW_WIDTH as f64),
+                (p.1 .0.y as f64 - actual_intersection.0 as f64).abs() * (700.0 / NEW_WIDTH as f64),
+            ]
+        })
+        .collect::<Vec<[f64; 2]>>();
+    let _plot_data2 = intersections
+        .iter()
+        .map(|p| {
+            [
+                p.0.x as f64 * (700.0 / NEW_WIDTH as f64),
+                (p.1 .1 as f64 - actual_intersection.1 as f64).abs(),
             ]
         })
         .collect::<Vec<[f64; 2]>>();
@@ -226,11 +234,12 @@ fn main() {
             });
         pb.finish_with_message("Saved all images");
     }
+    println!("Plotting results... graph2: {:?}", _plot_data2);
 
-    plot_main(plot_data);
+    plot_main(_plot_data, _plot_data2);
 }
 
-fn plot_main(graph: Vec<[f64; 2]>) {
+fn plot_main(graph: Vec<[f64; 2]>, graph2: Vec<[f64; 2]>) {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let options = eframe::NativeOptions {
@@ -238,7 +247,7 @@ fn plot_main(graph: Vec<[f64; 2]>) {
         ..Default::default()
     };
     // let graph: Vec<[f64; 2]> = vec![[0.0, 1.0], [2.0, 3.0], [3.0, 2.0]];
-    let graph2: Vec<[f64; 2]> = vec![];
+    // let graph2: Vec<[f64; 2]> = vec![];
     let graph3: Vec<[f64; 2]> = vec![];
 
     eframe::run_native(

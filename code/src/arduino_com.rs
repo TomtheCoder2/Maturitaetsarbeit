@@ -1,11 +1,11 @@
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::time::Duration;
 
 // use com::commands::Command;
 use serialport::prelude::*;
 use std::fmt::{Debug, Formatter};
-use std::thread::sleep; // Make sure this is imported
+use std::thread::sleep;
+// Make sure this is imported
 
 pub struct ArduinoCom {
     serial: Box<dyn SerialPort>,
@@ -18,6 +18,12 @@ impl Debug for ArduinoCom {
     }
 }
 
+impl Default for ArduinoCom {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ArduinoCom {
     pub fn new() -> Self {
         // list all ports and their names
@@ -25,7 +31,9 @@ impl ArduinoCom {
         let mut port_name = "/dev/tty.usbmodem1401".to_string(); // Default, will be overwritten if Arduino found
         for port in ports {
             println!("{:?}", port);
-            if format!("{:?}", port.port_type).contains("Arduino") || port.port_name.contains("usbmodem") {
+            if format!("{:?}", port.port_type).contains("Arduino")
+                || port.port_name.contains("usbmodem")
+            {
                 println!("Arduino found on port: {:?}", port.port_name);
                 port_name = port.port_name;
             }
@@ -44,10 +52,10 @@ impl ArduinoCom {
             ..Default::default()
         };
 
-        let mut port = serialport::open_with_settings(&port_name, &serial_settings)
+        let port = serialport::open_with_settings(&port_name, &serial_settings)
             .expect(&format!("Failed to open port: {}", port_name));
 
-        let mut arduino_com = ArduinoCom {
+        let arduino_com = ArduinoCom {
             serial: port,
             last_command: "".to_string(),
         };
@@ -87,7 +95,9 @@ impl ArduinoCom {
         let mut buffer = String::new();
         loop {
             let mut buf = [0; 1];
-            self.serial.read_exact(&mut buf).expect("Failed to read from port");
+            self.serial
+                .read_exact(&mut buf)
+                .expect("Failed to read from port");
             let c = buf[0] as char;
             if c == '\n' {
                 break;
@@ -145,7 +155,7 @@ impl ArduinoCom {
             match self.read_line() {
                 line if !line.is_empty() => {
                     output = line.trim().to_string(); // Trim whitespace just in case
-                    // println!("SYNC DEBUG: Received: '{}'", output);
+                                                      // println!("SYNC DEBUG: Received: '{}'", output);
                 }
                 _ => {
                     // println!("SYNC DEBUG: Received an empty line (likely just \\r\\n)");
@@ -157,27 +167,34 @@ impl ArduinoCom {
         }
         // println!("Finished syncing");
     }
-    
+
     pub fn get_pos(&mut self) -> f32 {
         self.get_pos_sync(true)
     }
 
     pub fn get_pos_sync(&mut self, sync: bool) -> f32 {
-        if sync { self.sync(); }
-        self.send_string("I");
-        // sleep for 500 ms
-        std::thread::sleep(std::time::Duration::from_millis(5));
+        self.get_value(sync, "I")
+    }
+
+    pub fn get_pulse_width(&mut self) -> f32 {
+        self.get_value(true, "pw")
+    }
+
+    fn get_value(&mut self, sync: bool, command: &str) -> f32 {
+        if sync {
+            self.sync();
+        }
+        self.send_string(command);
+        sleep(Duration::from_millis(5));
         let output = self.read_line();
-        // println!("o: {}", output);
-        // output format:    Pos: 32
-        assert!(output.starts_with("Pos:"));
-        let pos = output
+        let prefix = format!("{}:", command);
+        assert!(output.starts_with(&prefix));
+        let value = output
             .split_whitespace()
             .nth(1)
             .unwrap()
             .parse::<f32>()
             .unwrap();
-        // println!("pos: {}", pos);
-        pos
+        value
     }
 }

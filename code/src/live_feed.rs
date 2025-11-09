@@ -1,20 +1,17 @@
 use crate::ball::{standard_selection, MAGNITUE_DIFF};
-use std::f32::consts::PI;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI32;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Sender};
 use std::sync::{mpsc, Mutex};
-use std::thread;
 use std::time::Instant;
 
 use cameleon::u3v::{ControlHandle, StreamHandle};
 use cameleon::Camera;
-use eframe::{set_value, Frame};
+use eframe::{Frame};
 use egui::{Color32, Context};
 use egui::{ColorImage, TextureHandle};
-use crate::arduino_com::ArduinoCom;
 use crate::ball::BallComp;
-use crate::{arduino_com, ball, cam_thread, gen_table, increment_last_number_in_filename, undistort_image_table};
+use crate::{ball, increment_last_number_in_filename};
 use std::sync::atomic::Ordering;
 use atomic_float::AtomicF32;
 
@@ -22,7 +19,7 @@ use crate::live_feed::Command::*;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer};
 use serde::{Deserialize, Serialize};
 use crate::cam_thread::{load_raw, CamThread};
-use crate::live_feed::Command::{Exposure, ReloadRaw};
+use crate::live_feed::Command::{ReloadRaw};
 
 #[derive(Debug, Clone)]
 pub enum Command {
@@ -226,11 +223,10 @@ impl eframe::App for App {
                     return;
                 }
             };
-            let actual_player_pos = ACTUAL_PLAYER_POSITION.lock().unwrap().clone();
             let comp_fps = 1. / self.last_frame.elapsed().as_secs_f64();
             self.last_frame = Instant::now();
             let player_detection_fps = PLAYER_DETECTION_FPS.load(Ordering::Relaxed);
-            ui.label(format!("Comp FPS: {:>5.0}, actual player pos: {}:{}, player detection fps: {}", comp_fps, actual_player_pos.0, actual_player_pos.1, player_detection_fps));
+            ui.label(format!("Comp FPS: {:>5.0}, player detection fps: {}", comp_fps, player_detection_fps));
             // println!(
             // "Image loaded: {}x{}",
             // buffer_undistorted.0, buffer_undistorted.1
@@ -248,11 +244,6 @@ impl eframe::App for App {
                     .unwrap(),
             );
 
-            let new_height = image.height();
-            let new_width =
-                (image.width() as f32 / image.height() as f32 * new_height as f32) as u32;
-            // let mut image =
-            // image.resize(NEW_WIDTH, NEW_HEIGHT, image::imageops::FilterType::Nearest);
             let mut original_undistorted_image = image.clone();
             let unmodified_original_undistorted_image = image.clone();
             let original_image = DynamicImage::ImageRgb8(
@@ -319,51 +310,7 @@ impl eframe::App for App {
                     // pixel.2 = image::Rgba([255, 255, 255, gray]);
                 }
             }
-            // }
-            // if let Some(pos) = self.arduino_com.try_receive_command() {
-            // if let com::commands::Command::Pos(p) = pos {
-            // self.motor_pos = p;
-            // }
-            // }
-            // ui.label(format!("Motor pos: {}", self.motor_pos));
-            let mut player_final_pos = 0;
-            // x = 102 is the player
-            if let Some(y_intercept) = self.ball_comp.intersection_x(44.) {
-                let y_intercept = y_intercept.0;
-                // let rl_y_intercept = self.compute_rl_coords.transform_point((y_intercept.x, y_intercept.y));
-                // y=0 for the player is at 450mm rl coords
-                let player_y = 450. - y_intercept[1];
-                // let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
-                // let player_y = 450. - ball_irl.1;
-                // ui.horizontal (|ui|{ui.label(format!("y intercept: {:.2}, {:.2}", y_inercept.x, y_inercept.y));
-                // ui.label(format!("Player pos: y: {:.2}", player_y));});
-                if player_y > 5. && player_y < 140. && self.last_command.elapsed().as_secs_f32() > 0.001 {
-                    // gear: diameter = 83mm, 200 steps per revolution, 1
-                    // c
-                    // 8° per step
-                    // let rot = player_y / (PI * 64.) * 200.;
-                    let x = 1058.82 - 2.35 * y_intercept[1];
-                    // println!("pos: {player_y}");
-                    // if rot < 30. {
-                    // self.arduino_com.send_command(com::commands::Command::Reset(40));
-                    // }
-                    // self.arduino_com.send_stepper_motor_speed(self.speed);
-                    // self.arduino_com.send_stepper_motor_pos(rot as i32);
-                    // self.arduino_com.send_string(&format!("{}", x as i32));
-                    // self.last_command = Instant::now();
-                    player_final_pos = x as i32;
-                }
-            }
-            // motor, y
-            // 0   -> 450 mm
-            // 400 -> 280 mm
-            //
-            // 450 - y = 450 - 280 / 400 * x
-            // 450 - y = 170 / 400 * x
-            // 450 - y = 0.425 * x
-            // x = (450 - y) / 0.425
-            // x = 1058.82 - 2.35 * y
-            // y = 450 - 0.425 * x
+            
 
             // let ball_irl = self.compute_rl_coords.transform_point((ball.0 as f32, ball.1 as f32));
             let ball_irl = (ball.0 as f32, ball.1 as f32);
@@ -378,31 +325,7 @@ impl eframe::App for App {
                 ui.label(format!("Ball irl: x: {:.2}, y: {:.2}", ball_irl.0, ball_irl.1));
                 ui.label(format!("Player pos: y: {:.2}", player_y));
             });
-            if player_y > 5. && player_y < 140. && self.last_command.elapsed().as_secs_f32() > 0.01 {
-                // gear: diameter = 83mm, 200 steps per revolution, 1
-                // c
-                // 8° per step
-                let rot = player_y / (PI * 64.) * 200.;
-                let x = 1058.82 - 2.35 * ball_irl.1;
-                player_final_pos = x as i32;
-                // println!("pos: {player_y}");
-                // if rot < 30. {
-                // self.arduino_com.send_command(com::commands::Command::Reset(40));
-                // }
-                // self.arduino_com.send_stepper_motor_speed(self.speed);
-                // self.arduino_com.send_stepper_motor_pos(rot as i32);
-                // self.arduino_com.send_string(&format!("{}", player_final_pos));
-                // self.last_command = Instant::now();
-            }
-
-            if self.show_player_predicition {
-                ball::draw_circle(&mut image, 100, actual_player_pos.1, 5., [255, 0, 0, 255]);
-                // draw the line y = actual_player_pos.1
-                for x in 0..image.width() {
-                    image.put_pixel(x, actual_player_pos.1 as u32, image::Rgba([255, 0, 0, 255]));
-                }
-            }
-
+            
             for pixel in image.as_mut_rgb8().unwrap().pixels_mut() {
                 pixel.0[0] = (pixel.0[0] as f64 * self.brightness).min(255.0) as u8;
                 pixel.0[1] = (pixel.0[1] as f64 * self.brightness).min(255.0) as u8;
@@ -533,7 +456,7 @@ impl eframe::App for App {
                 if ui.button("Save Raw overlay").clicked() {
                     save_img(unmodified_original_undistorted_image.clone(), "./raw.png".to_string());
                     self.raw_image = load_raw();
-                    self.sender.send(ReloadRaw);
+                    self.sender.send(ReloadRaw).unwrap();
                 }
                 // ui.label("Speed:");
                 // ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
@@ -566,7 +489,7 @@ impl eframe::App for App {
                     }
                     // if recording is stopped save images to file
                     if !self.recording {
-                        let mut prefix = format!(
+                        let prefix = format!(
                             "./recording_{}/",
                             chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
                         );
@@ -574,9 +497,9 @@ impl eframe::App for App {
                         for (i, image) in self.recorded_images.iter().enumerate() {
                             let mut file_name = prefix.clone();
                             file_name.push_str(&format!("{:04}.png", i));
-                            let mut file = std::fs::File::create(&file_name).unwrap();
+                            // let mut file = std::fs::File::create(&file_name).unwrap();
                             // write image to file
-                            let mut image_buffer = ImageBuffer::new(width as u32, height as u32);
+                            let mut image_buffer = ImageBuffer::new(width, height);
                             for x in 0..width as usize {
                                 for y in 0..height as usize {
                                     let pixel = image.pixels[y * width as usize + x].clone();
@@ -615,7 +538,7 @@ impl eframe::App for App {
                     self.sender.send(Command::Exposure(self.exposure)).unwrap();
                 }
                 ui.label("Brightness: ");
-                ui.add(egui::DragValue::new(&mut self.brightness).speed(0.01).clamp_range(0.0..=10.0));
+                ui.add(egui::DragValue::new(&mut self.brightness).speed(0.01).range(0.0..=10.0));
                 ui.checkbox(&mut self.show_original, "Show original Image");
                 ui.checkbox(&mut self.show_undistorted, "Show undistorted Image");
                 ui.checkbox(&mut self.auto_exposure, "Auto Exposure");
@@ -750,27 +673,25 @@ impl eframe::App for App {
                             // }
                             println!("Player pos: y:{}", posy);
                             self.player_calibration_pos += 1;
-                            self.sender.send(Command::PlayerCalibration(POS[self.player_calibration_pos as usize]));
+                            self.sender.send(PlayerCalibration(POS[self.player_calibration_pos as usize])).unwrap();
                             if self.player_calibration_pos >= POS.len() as i32 - 1 {
                                 self.mode = Mode::Normal;
                                 println!("Player calibration finished");
                                 println!("pos: {:?}", self.final_player_calibration_positions);
                                 println!("Player calibration positions: {}", self.final_player_calibration_positions.iter().enumerate().map(|(i, x)| format!("\t{}: {}: {}\n", i, POS[i], x)).collect::<Vec<String>>().join(""));
-                                self.sender.send(Command::FinishPlayerCalibration(self.final_player_calibration_positions.clone()));
+                                self.sender.send(FinishPlayerCalibration(self.final_player_calibration_positions.clone())).unwrap();
                                 PAUSEPLAYER.store(self.pause_player, Ordering::Relaxed);
                                 self.pause_player = false;
-                            } else {}
+                            }
                         }
                     }
-                } else {
-                    if ui.button("Player Calibration").clicked() {
-                        self.mode = Mode::PlayerCalibration;
-                        self.player_calibration_pos = -1;
-                        PAUSEPLAYER.store(true, Ordering::Relaxed);
-                        self.pause_player = true;
-                        self.sender.send(Command::PlayerCalibration(-1));
-                        self.final_player_calibration_positions.clear();
-                    }
+                } else if ui.button("Player Calibration").clicked() {
+                    self.mode = Mode::PlayerCalibration;
+                    self.player_calibration_pos = -1;
+                    PAUSEPLAYER.store(true, Ordering::Relaxed);
+                    self.pause_player = true;
+                    self.sender.send(Command::PlayerCalibration(-1)).unwrap();
+                    self.final_player_calibration_positions.clear();
                 }
                 if self.calibration_mode {
                     ui.label("Calibration Image Interval: ");
@@ -894,7 +815,7 @@ pub fn run_gui(tx: Sender<Command>) {
         .expect("Failed to run Camera");
 }
 
-fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String) {
+pub fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String) {
     let mut params_ctxt = camera.params_ctxt().unwrap();
     // Get `Gain` node of `GenApi`.
     // `GenApi SFNC` defines that `Gain` node should have `IFloat` interface,
@@ -913,8 +834,8 @@ fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String) {
         let value = exposure.entries(&mut params_ctxt);
         println!("{name}: {:?}", value);
         for value in value {
-            let value_value = value.value(&mut params_ctxt).clone();
-            let name = value.as_node().name(&mut params_ctxt).clone();
+            let value_value = value.value(&params_ctxt).clone();
+            let name = value.as_node().name(&params_ctxt);
 
             println!("{}: {:?}", name, value_value);
         }
@@ -941,7 +862,6 @@ pub fn main() {
 }
 
 // x, y, time, used
-pub static ACTUAL_PLAYER_POSITION: Mutex<(u32, u32, f32, bool)> = Mutex::new((0, 0, 0., false));
 pub static PLAYER_DETECTION_FPS: AtomicI32 = AtomicI32::new(0);
 pub static PAUSEPLAYER: AtomicBool = AtomicBool::new(false);
 pub static PAUSESHOOTING: AtomicBool = AtomicBool::new(false);

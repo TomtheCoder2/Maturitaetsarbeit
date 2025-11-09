@@ -1,17 +1,23 @@
 use image::io::Reader as ImageReader;
 use image::Pixel;
-use image::{DynamicImage, GenericImage, RgbImage};
-use image::{GenericImageView, ImageBuffer, Rgb, Rgba};
+use image::{DynamicImage, GenericImage};
+use image::{GenericImageView, ImageBuffer, Rgba};
 use nalgebra::{clamp, Vector2};
 use std::fmt::{Display, Formatter};
 use std::sync::atomic::AtomicI32;
 
-pub static MAGNITUE_DIFF: AtomicI32 = AtomicI32::new(20);
+pub static MAGNITUE_DIFF: AtomicI32 = AtomicI32::new(24);
 
 pub struct Ball {
     x: u32,
     y: u32,
     radius: f32,
+}
+
+impl Display for Ball {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Ball: ({}, {}), radius: {}", self.x, self.y, self.radius)
+    }
 }
 
 #[macro_export]
@@ -37,8 +43,8 @@ pub fn read_image(
     let t1 = std::time::Instant::now();
     let img = ImageReader::open(file_name.clone())?.decode()?;
     const SCALING: u32 = 1;
-    let new_width = img.width() / SCALING;
-    let new_height = img.height() / SCALING;
+    let _new_width = img.width() / SCALING;
+    let _new_height = img.height() / SCALING;
     // let mut output = ImageBuffer::new(img.width() / SCALING + 1, img.height() / SCALING + 1);
     let mut output = ImageBuffer::new(img.width(), img.height());
     output.put_pixel(0u32, 0u32, Rgba([0u8, 0, 0, 0]));
@@ -129,19 +135,15 @@ pub fn read_image(
     balls_raw.retain(|ball| ball.count > 2);
     debug!("Image processed in {:?}", t1.elapsed());
     // debug!("balls: {:?}, len: {}", balls, balls.len());
-    impl Display for Ball {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(f, "Ball: ({}, {}), radius: {}", self.x, self.y, self.radius)
-        }
-    }
+    
     let mut balls = Vec::new();
-    for (_i, pixel) in img.pixels().enumerate() {
-        let rgb = pixel.2.channels();
-        let (r, g, b, a) = (rgb[0], rgb[1], rgb[2], rgb[3]);
-        let x = pixel.0;
-        let y = pixel.1;
-        // output.put_pixel(x, y, Rgba([r, g, b, a / 2]));
-    }
+    // for (_i, pixel) in img.pixels().enumerate() {
+    //     let rgb = pixel.2.channels();
+    //     let (r, g, b, a) = (rgb[0], rgb[1], rgb[2], rgb[3]);
+    //     let x = pixel.0;
+    //     let y = pixel.1;
+    //     // output.put_pixel(x, y, Rgba([r, g, b, a / 2]));
+    // }
     // crate lines with the centers of the balls that are between 25% and 75% of the image
     for ball in balls_raw.iter() {
         let x = (ball.sum_x / ball.count) as u32;
@@ -292,7 +294,7 @@ pub fn find_ball(
     // let mut new_output = ImageBuffer::new(img.width() / SCALING + 1, img.height() / SCALING + 1);
     let mut balls_raw: Vec<BallRaw> = Vec::new();
     // let pixels = img.pixels().collect::<Vec<_>>();
-    let t1 = std::time::Instant::now();
+    // let t1 = std::time::Instant::now();
     let mut counter = 0;
     // debug!("pixels: {}", img.pixels().count());
     for i in 0..width * height {
@@ -632,6 +634,7 @@ impl BallComp {
     }
 
     /// Check if the ball is still moving with the same velocity (direction and magnitude, but magnitude can be less because of drag), else change the velocity
+    // not used currently
     pub fn check_velocity(&mut self, ball0: Vec2, ball1: Vec2, dt: f32) {
         let new_velocity = (ball1 - ball0) / dt;
         let diff = new_velocity - self.velocity;
@@ -653,7 +656,15 @@ impl BallComp {
         //     "prediction: {:?}, ball: {:?}, diff: {:?}",
         //     prediction, ball, diff
         // );
-        if diff.magnitude() / self.velocity.magnitude() * 2000. > MAGNITUE_DIFF.load(std::sync::atomic::Ordering::Relaxed) as f32 {
+        // println!(
+        //     "diff magnitude adapted to vel: {}, threshold: {}, velocity: {}",
+        //     diff.magnitude() / self.velocity.magnitude() * 2000.,
+        //     MAGNITUE_DIFF.load(std::sync::atomic::Ordering::Relaxed) as f32,
+        //     self.velocity.magnitude()
+        // );
+        if diff.magnitude() / self.velocity.magnitude() * 2000.
+            > MAGNITUE_DIFF.load(std::sync::atomic::Ordering::Relaxed) as f32
+        {
             let diff = self.positions.last().unwrap().0 - ball;
             let new_velocity = diff / (self.positions.last().unwrap().1 - time);
             // println!(

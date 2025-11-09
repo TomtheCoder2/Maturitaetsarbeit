@@ -1,33 +1,18 @@
-use rayon::prelude::*;
-use std::ptr;
-use std::sync::{Arc, Mutex};
-
-// Define a new type that wraps the raw pointer
-struct SafePtr(*mut u32);
-
-// Implement Send and Sync for SafePtr
-unsafe impl Send for SafePtr {}
-unsafe impl Sync for SafePtr {}
-
 fn main() {
-    let mut list = vec![0u32; 100];
+    let mut var: &[i32] = &[0,1,4]; // 'var' continues to be a slice reference.
+    let owned_boxed_slice: Box<[i32]>; // Declared in outer scope to ensure longevity.
+    println!("{:?}", var);
 
-    // Get a mutable raw pointer to the list
-    let ptr = list.as_mut_ptr();
-    let safe_ptr = SafePtr(ptr);
-    let safe_ptr = Arc::new(Mutex::new(safe_ptr));
+    {
+        let new_array = [0, 3, 4];
+        // Convert the stack array to a heap-allocated Box<[i32]>.
+        // Ownership of this Box is moved to 'owned_boxed_slice'.
+        owned_boxed_slice = new_array.into_iter().collect::<Vec<i32>>().into_boxed_slice();
+        var = &owned_boxed_slice;
+    }
+    // Now 'owned_boxed_slice' lives in the outer scope.
+    // We can safely take a slice reference from it.
+    // var = &owned_boxed_slice;
 
-    // Parallel iteration
-    (0..100u32).into_par_iter().for_each(|x| {
-        let safe_ptr = Arc::clone(&safe_ptr);
-        unsafe {
-            // Lock the mutex to get access to the raw pointer
-            let safe_ptr = safe_ptr.lock().unwrap();
-            // Use the raw pointer to write directly to the list at index x
-            safe_ptr.0.add(x as usize).write(x);
-        }
-    });
-
-    // Print the list (this is safe after parallel writes are complete)
-    println!("{:?}", list);
+    println!("{:?}", var);
 }

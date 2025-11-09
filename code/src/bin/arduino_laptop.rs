@@ -1,17 +1,18 @@
-use std::thread;
-use std::time::Duration;
 use matura::arduino_com::ArduinoCom;
 use matura::plot::PlotApp;
+use std::thread;
+use std::time::Duration;
 
 fn main() {
     let mut com = ArduinoCom::new();
     let positions = vec![500, 800, 200, 250, 280, 400, 180, 900, 300];
     let mut sleep_duration = Duration::from_millis(0);
-    let n = 2;
+    let n = 1;
     let mut total_diff = 0;
     let mut total_time = 0.0;
     let mut actual_positions = vec![];
     let mut target_positions = vec![];
+    let mut pulse_widths: Vec<(f64, f64)> = vec![];
     let t00 = std::time::Instant::now();
     for _ in 0..n {
         for pos in positions.iter() {
@@ -25,11 +26,19 @@ fn main() {
                 let t = t00.elapsed().as_secs_f64();
                 actual_positions.push((t, actual_pos as f64));
                 target_positions.push((t, *pos as f64));
+                // let pw = com.get_pulse_width();
+                // pulse_widths.push((t, pw as f64));
                 thread::sleep(Duration::from_millis(10));
             }
             let time_taken = t0.elapsed().as_secs_f64();
             let actual_pos = com.get_pos() as i32;
-            println!("sent {}, actual pos: {}, diff: {} in {:.2}s", pos, actual_pos, actual_pos.abs_diff(*pos), time_taken);
+            println!(
+                "sent {}, actual pos: {}, diff: {} in {:.2}s",
+                pos,
+                actual_pos,
+                actual_pos.abs_diff(*pos),
+                time_taken
+            );
             total_diff += actual_pos.abs_diff(*pos);
             total_time += time_taken;
             // wait until key pressed
@@ -43,16 +52,23 @@ fn main() {
     let average = total_diff as f32 / positions.len() as f32 / n as f32;
     // we have 1024 steps per 200mm
     let avg_mm = average * 200.0 / 1024.0;
-    println!("Total difference: {}, avg: {}, {} mm", total_diff, average, avg_mm);
-    println!("Total time: {:.2}s, avg time per move: {:.2}s", total_time, total_time / positions.len() as f64 / n as f64);
+    println!(
+        "Total difference: {}, avg: {}, {} mm",
+        total_diff, average, avg_mm
+    );
+    println!(
+        "Total time: {:.2}s, avg time per move: {:.2}s",
+        total_time,
+        total_time / positions.len() as f64 / n as f64
+    );
     let actual_positions: Vec<[f64; 2]> = actual_positions.iter().map(|p| [p.0, p.1]).collect();
-    let target_positions : Vec<[f64; 2]>= target_positions.iter().map(|p| [p.0, p.1]).collect();
-    
-    // plot_main(actual_positions, target_positions);
+    let target_positions: Vec<[f64; 2]> = target_positions.iter().map(|p| [p.0, p.1]).collect();
+    let pulse_widths: Vec<[f64; 2]> = pulse_widths.iter().map(|p| [p.0, p.1]).collect();
+
+    // plot_main(actual_positions, target_positions, pulse_widths);
 }
 
-
-fn plot_main(graph: Vec<[f64; 2]>, graph2: Vec<[f64; 2]>) {
+fn plot_main(graph: Vec<[f64; 2]>, graph2: Vec<[f64; 2]>, graph3: Vec<[f64; 2]>) {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
     let options = eframe::NativeOptions {
@@ -61,7 +77,7 @@ fn plot_main(graph: Vec<[f64; 2]>, graph2: Vec<[f64; 2]>) {
     };
     // let graph: Vec<[f64; 2]> = vec![[0.0, 1.0], [2.0, 3.0], [3.0, 2.0]];
     // let graph2: Vec<[f64; 2]> = vec![];
-    let graph3: Vec<[f64; 2]> = vec![];
+    // let graph3: Vec<[f64; 2]> = vec![];
 
     eframe::run_native(
         "My egui App with a plot",
@@ -75,5 +91,5 @@ fn plot_main(graph: Vec<[f64; 2]>, graph2: Vec<[f64; 2]>) {
             }))
         }),
     )
-        .unwrap()
+    .unwrap()
 }
