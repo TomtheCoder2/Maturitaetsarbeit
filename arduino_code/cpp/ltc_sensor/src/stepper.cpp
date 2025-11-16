@@ -16,8 +16,8 @@ void stepper::setup() {
 void stepper::loop() {
     // read analog pin A15 and print its value
     current_ltc_value = analogRead(ltc_analogPin); // read the input pin
-    float error = (float) (target_ltc_value - current_ltc_value);
-    float delta = error - last_error;
+    const float error = (float) (target_ltc_value - current_ltc_value);
+    const float delta = error - last_error;
     integral += error;
     // Clamp the integral term
     if (integral > integral_max) {
@@ -53,8 +53,8 @@ void stepper::loop() {
 }
 
 // lets define speed as a float between 0 and 1, 0 meaning largest pulseWidth and 1 meaning smallest pulseWidth
-void stepper::step(int direction, float speed, int a_minPulseWidth) {
-    int targetPulseWidth = map(speed * 1000, 0, 1000, maxPulseWidth, a_minPulseWidth);
+void stepper::step(const int direction, const float speed, const int a_minPulseWidth) {
+    const int targetPulseWidth = map(speed * 1000, 0, 1000, maxPulseWidth, a_minPulseWidth);
     if (direction == current_direction) {
         if (pulseWidth < targetPulseWidth) {
             pulseWidth = min(pulseWidth + acceleration, targetPulseWidth);
