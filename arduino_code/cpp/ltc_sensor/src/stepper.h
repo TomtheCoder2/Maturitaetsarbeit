@@ -9,7 +9,7 @@ constexpr int dirXPin = 5;
 constexpr int microStepsRes = 4;
 constexpr int ltc_analogPin = A15; // potentiometer wiper (middle terminal) connected to analog pin 15
 constexpr int minPulseWidth = 1;
-constexpr int minSlowPulseWidth = 5;
+constexpr int minSlowPulseWidth = 10;
 constexpr int maxPulseWidth = 250;
 constexpr int minError = 3;
 constexpr int acceleration = 40;
@@ -33,17 +33,24 @@ public:
     int target_ltc_value = 500;
     int current_ltc_value = 500;
     int current_direction = HIGH;
-    float p = 0.0030;
-    float i = 0.035;
-    float d = 1;
+    float p = 0.07;
+    float i = 0.21;
+    float d = 2.2;
     float last_error = 0;
     float integral = 0;
 
     int pulseWidth = maxPulseWidth;
     void setup();
     void loop();
+
+    void set_target(int input_int);
+
 private:
     void step(int direction, float speed, int a_minPulseWidth);
+    bool reached_target = false;
+    int move_start_time_ms = 0;
+    // counts how many times we are within the error margin
+    int arrived_counter = 0;
 };
 
 

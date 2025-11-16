@@ -65,11 +65,24 @@ void loop() {
             dc_motor.target = input_int;
             return;
         }
+        // pid set:
+        // eg. pid 4 3 2
+        if (input.startsWith("pid")) {
+            input.replace("pid ", "");
+            int firstSpace = input.indexOf(' ');
+            int secondSpace = input.indexOf(' ', firstSpace + 1);
+            float p = input.substring(0, firstSpace).toFloat();
+            float i = input.substring(firstSpace + 1, secondSpace).toFloat();
+            float d = input.substring(secondSpace + 1).toFloat();
+            stepper1.p = p;
+            stepper1.i = i;
+            stepper1.d = d;
+            return;
+        }
         // check if number and then set stepper::target to that number
         if (input.toInt() != 0 || input == "0") {
             int input_int = input.toInt();
-            stepper1.target_ltc_value = input_int;
-            stepper1.integral = 0;
+            stepper1.set_target(input_int);
             // Serial.print("Set target_ltc_value to: ");
             // Serial.println(stepper1.target_ltc_value);
             return;

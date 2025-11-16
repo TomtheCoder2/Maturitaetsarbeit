@@ -49,7 +49,6 @@ impl ArduinoCom {
             parity: Parity::None,
             stop_bits: StopBits::One,
             timeout: Duration::from_millis(500), // Keep this generous
-            ..Default::default()
         };
 
         let port = serialport::open_with_settings(&port_name, &serial_settings)
@@ -196,5 +195,9 @@ impl ArduinoCom {
             .parse::<f32>()
             .unwrap();
         value
+    }
+
+    pub fn set_pid(&mut self, p: f32, i: f32, d: f32) {
+        self.send_string(&format!("pid {} {} {}", p, i, d));
     }
 }
