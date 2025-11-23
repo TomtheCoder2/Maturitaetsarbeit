@@ -11,16 +11,17 @@ constexpr int EN_PIN = 8;
 constexpr int LTC_PIN = A15;
 
 // The number of discrete measurements to take in each direction.
-constexpr int NUM_MEASUREMENTS = 5;
+constexpr int NUM_MEASUREMENTS = 2;
 
 // The number of steps the motor will take for each measurement.
 // Ensure that (NUM_MEASUREMENTS * STEPS_PER_MEASUREMENT) does not exceed
 // the physical travel limits of your system.
-constexpr int STEPS_PER_MEASUREMENT = 200;
+constexpr int STEPS_PER_MEASUREMENT = 300;
 
 // The duration of the step pulse in microseconds
-constexpr int PULSE_WIDTHS_US[] = {1000, 800, 600, 500, 400, 200, 100, 50, 20, 1};
-constexpr int PULSE_WIDTH_US = PULSE_WIDTHS_US[0];
+constexpr int PULSE_WIDTHS_US[] = {1000, 500, 200, 100, 50, 20, 1};
+constexpr int DEFAULT_PULSE_WIDTH_US = PULSE_WIDTHS_US[0];
+const long ACC = 10;
 
 // A brief delay in milliseconds after each move to let the system settle.
 constexpr int SETTLE_DELAY_MS = 500;
@@ -44,11 +45,19 @@ void takeSteps(long steps, long delayUS) {
     // Set the direction based on the sign of the 'steps' parameter
     digitalWrite(DIR_PIN, (steps > 0) ? HIGH : LOW);
 
+    // accelerate
+    long current_delay = DEFAULT_PULSE_WIDTH_US;
+
     for (long i = 0; i < abs(steps); ++i) {
+        if ((DEFAULT_PULSE_WIDTH_US - current_delay) / ACC > abs(steps) - i) {
+            current_delay = min(current_delay + ACC, DEFAULT_PULSE_WIDTH_US);
+        } else if (delayUS < current_delay) {
+            current_delay = max(current_delay - ACC, delayUS);
+        }
         digitalWrite(STEP_PIN, HIGH);
-        delayMicroseconds(delayUS);
+        delayMicroseconds(current_delay);
         digitalWrite(STEP_PIN, LOW);
-        delayMicroseconds(delayUS);
+        delayMicroseconds(current_delay);
     }
 
     digitalWrite(EN_PIN, HIGH); // Disable motor to save power and reduce heat
@@ -61,7 +70,7 @@ void takeSteps(long steps, long delayUS) {
  * @param out_scale A reference to a float where the calculated scale
  *                  for this direction will be stored.
  */
-void runMeasurementSequence(long steps_per_move, float& out_scale, long delayUS = PULSE_WIDTH_US) {
+void runMeasurementSequence(long steps_per_move, float& out_scale, long delayUS = DEFAULT_PULSE_WIDTH_US) {
     const long start_ltc_value = analogRead(LTC_PIN);
     Serial.println("Move #: \tTotal Steps: \tLTC Reading:");
     Serial.print("0\t0\t\t");
