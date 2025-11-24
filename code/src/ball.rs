@@ -32,7 +32,7 @@ macro_rules! debug {
 pub type SelectionFn = dyn Fn(u8, u8, u8) -> bool;
 
 pub fn standard_selection(r: u8, g: u8, b: u8) -> bool {
-    (r as i32 + g as i32 + b as i32) > 128
+    (r as i32 + g as i32 + b as i32) > 90
 }
 
 pub fn read_image(

@@ -10,14 +10,14 @@ use matura::live_feed::subtract_image;
 use matura::plot::PlotApp;
 
 fn main() {
-    let test_folder = "./recording_3";
+    let test_folder = "./recording_5";
     // lets read all images from the folder
     let mut files = std::fs::read_dir(test_folder)
         .unwrap()
         .filter_map(|entry| {
             let entry = entry.unwrap();
             let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("jpeg") {
+            if path.extension().and_then(|s| s.to_str()) == Some("jpeg") || path.extension().and_then(|s| s.to_str()) == Some("png") {
                 Some(path)
             } else {
                 None
@@ -106,7 +106,7 @@ fn main() {
         );
         println!("time to find ball: {:.3} ms", t0.elapsed().as_micros() as f32 / 1000f32);
 
-        virtual_time += 1. / 149.;
+        virtual_time += 1. / 272.75;
         overlay_images.push(original_undistorted_image.clone());
         #[derive(Copy, Clone, Debug)]
         struct Ball {

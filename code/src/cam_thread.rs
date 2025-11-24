@@ -1,7 +1,6 @@
-use std::fmt::format;
-use std::io::Write;
 use crate::arduino_com::ArduinoCom;
 use crate::ball::{standard_selection, BallComp};
+use crate::image_utils::{gpu_debayer, MetalContext};
 use crate::live_feed::Command::*;
 use crate::live_feed::{
     subtract_image, Command, Selection, FOLLOWBALL, FPS, IMAGE_BUFFER, IMAGE_BUFFER_UNDISTORTED,
@@ -10,14 +9,14 @@ use crate::live_feed::{
 use cameleon::genapi::NodeStore;
 use cameleon::u3v::{ControlHandle, StreamHandle};
 use cameleon::Camera;
+use cameleon_genapi::interface::INode;
 use egui::ColorImage;
+use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Instant;
-use cameleon_genapi::interface::INode;
-use crate::image_utils::bayer_rg12_to_rgb8;
 
 pub fn set_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String, value: f64) {
     let mut params_ctxt = camera.params_ctxt().unwrap();
@@ -75,11 +74,7 @@ pub fn set_value_i64(camera: &mut Camera<ControlHandle, StreamHandle>, name: Str
     }
 }
 
-pub fn set_enum_value(
-    camera: &mut Camera<ControlHandle, StreamHandle>,
-    name: &str,
-    value: &str,
-) {
+pub fn set_enum_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: &str, value: &str) {
     let mut params_ctxt = camera.params_ctxt().unwrap();
     let enum_node = params_ctxt
         .node(name)
@@ -101,7 +96,6 @@ pub fn set_enum_value(
     }
 }
 
-
 pub fn execute_command(camera: &mut Camera<ControlHandle, StreamHandle>, name: &str) {
     let mut params_ctxt = camera.params_ctxt().unwrap();
     let command_node = params_ctxt
@@ -121,14 +115,15 @@ pub fn execute_command(camera: &mut Camera<ControlHandle, StreamHandle>, name: &
     }
 }
 
-
 pub fn print_all_options(camera: &mut Camera<ControlHandle, StreamHandle>) {
     let mut options_file = std::fs::File::create("camera_options.txt").unwrap();
     let mut params_ctxt = camera.params_ctxt().unwrap();
     params_ctxt.node_store().visit_nodes(|node| {
         // Print debug info for each node (most implementations include the node name)
         // println!("{:?}", node);
-        options_file.write_all(format!("{:#?}\n", node).as_bytes()).unwrap();
+        options_file
+            .write_all(format!("{:#?}\n", node).as_bytes())
+            .unwrap();
 
         // node: &NodeData: is an enum with enum types:
         // #[derive(Debug, Clone)]
@@ -274,7 +269,7 @@ impl CamThread {
         // get_value(&mut camera, "DeviceLinkThroughputLimitMode".to_string());
 
         execute_command(&mut camera, "AcquisitionStop");
-        set_enum_value(&mut camera, "PixelFormat", "BayerRG12");
+        set_enum_value(&mut camera, "PixelFormat", "BayerRG12p");
         execute_command(&mut camera, "AcquisitionStart");
 
         // Start streaming. Channel capacity is set to 3.
@@ -289,6 +284,7 @@ impl CamThread {
             let mut frame_counter = 0;
             let mut last_fps = [0.0; 100];
             let mut paused = false;
+            let metal_context = MetalContext::new().expect("Metal init failed");
 
             // undistort image
 
@@ -604,10 +600,11 @@ impl CamThread {
 
                     let image = payload.image();
                     if let Some(image_rg12) = image {
-                        let image = &bayer_rg12_to_rgb8(
+                        let image = &metal_context.debayer(
                             image_rg12,
                             image_info.width as usize,
                             image_info.height as usize,
+                            true,
                         );
                         crate::undistort_image_table(
                             image,

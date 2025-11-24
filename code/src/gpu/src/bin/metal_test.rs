@@ -1,6 +1,4 @@
 use metal::*;
-use objc::runtime::Object;
-use std::ptr;
 
 fn main() {
     // Get the default Metal device
@@ -18,18 +16,21 @@ fn main() {
     let buffer1 = device.new_buffer_with_data(
         input1.as_ptr() as *const _,
         (size * std::mem::size_of::<f32>()) as u64,
-        MTLResourceOptions::StorageModeShared,
+        MTLResourceOptions::CPUCacheModeWriteCombined,
     );
     let buffer2 = device.new_buffer_with_data(
         input2.as_ptr() as *const _,
         (size * std::mem::size_of::<f32>()) as u64,
-        MTLResourceOptions::StorageModeShared,
+        MTLResourceOptions::CPUCacheModeWriteCombined,
     );
     let output_buffer = device.new_buffer(
         (size * std::mem::size_of::<f32>()) as u64,
-        MTLResourceOptions::StorageModeShared,
+        MTLResourceOptions::CPUCacheModeWriteCombined,
     );
-    println!("Buffer creation time: {:.3} ms", t0.elapsed().as_micros()  as f32/ 1000f32);
+    println!(
+        "Buffer creation time: {:.3} ms",
+        t0.elapsed().as_micros() as f32 / 1000f32
+    );
 
     // Metal Shading Language (MSL) compute shader source
     let shader_source = include_str!("../../shaders/add.metal");
@@ -39,8 +40,12 @@ fn main() {
         .new_library_with_source(shader_source, &CompileOptions::new())
         .expect("Failed to compile shader");
 
-    let function = library.get_function("add_arrays", None).expect("Function not found");
-    let pipeline = device.new_compute_pipeline_state_with_function(&function).expect("Pipeline creation failed");
+    let function = library
+        .get_function("add_arrays", None)
+        .expect("Function not found");
+    let pipeline = device
+        .new_compute_pipeline_state_with_function(&function)
+        .expect("Pipeline creation failed");
 
     // Create command buffer and encoder
     let command_buffer = command_queue.new_command_buffer();
@@ -60,8 +65,16 @@ fn main() {
     // encoder.dispatch_threads(thread_group, threads_per_group);
 
     // Note: For simple dispatch, use dispatch_threads
-    let threads_per_threadgroup = MTLSize { width: 64, height: 1, depth: 1 };
-    let num_threadgroups = MTLSize { width: ((size + 63) / 64) as NSUInteger, height: 1, depth: 1 };
+    let threads_per_threadgroup = MTLSize {
+        width: 64,
+        height: 1,
+        depth: 1,
+    };
+    let num_threadgroups = MTLSize {
+        width: ((size + 63) / 64) as NSUInteger,
+        height: 1,
+        depth: 1,
+    };
     encoder.dispatch_thread_groups(num_threadgroups, threads_per_threadgroup);
 
     encoder.end_encoding();

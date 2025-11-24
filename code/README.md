@@ -15,3 +15,4 @@
   * Smoother acceleration
   * Maybe use the AccelStepper library
 - [ ] Maybe rewrite everything in python
+- [ ] switch to vimba library

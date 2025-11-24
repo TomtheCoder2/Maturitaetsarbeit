@@ -16,6 +16,7 @@ rayon = "1.5.1"
 serde = { version = "1.0.130", features = ["derive"] }
 indicatif = "0.18.2"
 egui_plot = "0.34.0"
+vimba-sys = "0.2.0"
 
 #com = { path = "../com" }
 
@@ -32,6 +33,16 @@ atomic_float = "1.1.0"
 env_logger = "0.11.8"
 
 rustyline = "17.0.2"
+anyhow = "1.0.98"
+
+metal = "0.24"  # Rust bindings to Metal API; cargo install if needed
+objc = "0.2"    # For objc runtime (Metal uses it)
+cocoa = "0.24"
+once_cell = "1.19"  # For thread-safe lazy init (Sync/Send safe)
+# Remove lazy_static if present
+
+[build-dependencies]
+cc = "1.0"  # To compile Metal shader during build
 
 [profile.release]
 debug = 1
