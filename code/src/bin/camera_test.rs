@@ -1,119 +1,70 @@
-extern crate core;
-use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
-
-use cameleon::u3v;
-use image::save_buffer_with_format;
+use matura::cam_thread::*;
+use matura::image_utils::bayer_rg12_to_rgb8;
 
 fn main() {
-    // Enumerates all cameras connected to the host.
-    let mut cameras = u3v::enumerate_cameras().unwrap();
-
-    if cameras.is_empty() {
-        println!("no camera found");
-        return;
-    }
-
+    // construct the camera
+    let mut cameras = cameleon::u3v::enumerate_cameras().unwrap();
     let mut camera = cameras.pop().unwrap();
-
     // Opens the camera.
     camera.open().unwrap();
-    // Loads `GenApi` context. This is necessary for streaming.
+    // Loads `GenApi` context. This is necessary for streaming
     camera.load_context().unwrap();
+    print_all_options(&mut camera);
+
+    // start the camera stream
+    set_value(&mut camera, "ExposureTime".to_string(), 5000.);
+    // set_value(&mut camera, "AcquisitionFrameRate".to_string(), 300.0);
+    // get_value(&mut camera, "DeviceLinkThroughputLimitMode".to_string());
+
+    execute_command(&mut camera, "AcquisitionStop");
+    set_enum_value(&mut camera, "PixelFormat", "BayerRG12");
+    execute_command(&mut camera, "AcquisitionStart");
 
     // Start streaming. Channel capacity is set to 3.
     let payload_rx = camera.start_streaming(3).unwrap();
 
-    let mut images = vec![];
-    let mut width = 0;
-    let mut height = 0;
-    let t1 = std::time::Instant::now();
-
-    let mut n = 0;
-    let mut last_time = std::time::Instant::now();
-    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let stop_clone = stop.clone();
-    std::thread::spawn(move || {
-        let mut input = String::new();
-        println!("Press Enter to stop streaming...");
-        let _ = std::io::stdin().read_line(&mut input);
-        stop_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-    });
-
-    while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+    let t0 = std::time::Instant::now();
+    let n = 100;
+    let out_dir = std::path::Path::new("./output");
+    std::fs::create_dir_all(out_dir).unwrap();
+    for _ in 0..n {
+        // Receives next payload.
         let payload = match payload_rx.recv_blocking() {
             Ok(payload) => payload,
             Err(e) => {
-                println!("payload receive error: {e}");
+                println!(
+                    "[{}]Payload receive error: {e}",
+                    chrono::Local::now().format("%Y-%m-%d_%H-%M-%S")
+                );
                 continue;
             }
         };
-        // println!(
-        //     "payload received! block_id: {:?}, timestamp: {:?}",
-        //     payload.id(),
-        //     payload.timestamp()
-        // );
         if let Some(image_info) = payload.image_info() {
-            // println!("{:?}\n", image_info);
-            width = image_info.width;
-            height = image_info.height;
-
-            let image = payload.image();
-            if let Some(image) = image {
-                // save image to images
-                images.push(image.to_vec());
-                n += 1;
-            }
-        }
-
-        // let delta = last_time.elapsed();
-        // println!("Frame time: {:?}, fps: {}", delta, 1.0 / delta.as_secs_f64());
-        last_time = std::time::Instant::now();
-
-        // Send back payload to streaming loop to reuse the buffer. This is optional.
-        payload_rx.send_back(payload);
-    }
-
-    let t2 = std::time::Instant::now();
-    println!("Time taken: {:?}", t2 - t1);
-    println!("FPS: {}", n as f64 / (t2 - t1).as_secs_f64());
-    println!("Total frames captured: {}", n);
-
-    // if the foler images doesnt exist, create it
-    // dir name with current timestamp (in this format: recording_DDMMYYYY_HHMMSS)
-    let dir_name = format!("recording_{}", chrono::Local::now().format("%d%m%Y_%H%M%S"));
-    std::fs::create_dir_all(dir_name.clone()).unwrap();
-
-    // Closes the camera.
-    camera.close().unwrap();
-
-    // save images to file
-    println!("Saving images to folder: {}", dir_name);
-    let total = images.len();
-    if total == 0 {
-        println!("No images to save");
-    } else {
-        // let pb show the eta
-        let pb = ProgressBar::new(total as u64).with_style(
-            ProgressStyle::with_template(
-                "[{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
-            )
-            .unwrap()
-            .progress_chars("##-"),
-        );
-        images.par_iter().enumerate().for_each(|(i, image)| {
-            let path = format!("{}/image_{}.jpeg", dir_name, i);
-            save_buffer_with_format(
-                path,
-                &image,
-                width as u32,
-                height as u32,
-                image::ColorType::Rgb8,
-                image::ImageFormat::Jpeg,
+            println!(
+                "[{}]Received image: {}x{}, PixelFormat: {:?}",
+                chrono::Local::now().format("%Y-%m-%d_%H-%M-%S"),
+                image_info.width,
+                image_info.height,
+                image_info.pixel_format
+            );
+            let image = payload.image().unwrap();
+            let image_rgb8 = bayer_rg12_to_rgb8(
+                image,
+                image_info.width as usize,
+                image_info.height as usize,
+            );
+            // save to file
+            let filename = format!("./output/camera_test_frame_{}.png", t0.elapsed().as_millis());
+            matura::image_utils::save_rgb8_image(
+                &filename,
+                &image_rgb8,
+                image_info.width as usize,
+                image_info.height as usize,
             )
             .unwrap();
-            pb.inc(1);
-        });
-        pb.finish_with_message("Saved all images");
+        }
     }
+    let elapsed = t0.elapsed().as_secs_f64();
+    println!("Elapsed time for 100 frames: {:.3} s", elapsed);
+    println!("Average FPS: {:.2}", n as f64 / elapsed);
 }

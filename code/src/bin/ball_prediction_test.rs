@@ -73,6 +73,7 @@ fn main() {
         // let (width, height) = image.dimensions();
         let image = image.to_vec();
 
+        let t0 = std::time::Instant::now();
         matura::undistort_image_table(
             &*image,
             &mut undistorted_image,
@@ -84,7 +85,6 @@ fn main() {
         let mut original_undistorted_image = DynamicImage::ImageRgb8(
             ImageBuffer::from_raw(NEW_WIDTH, NEW_HEIGHT, undistorted_image.clone()).unwrap(),
         );
-
         subtract_image(&mut undistorted_image, raw_image);
 
         let t0 = std::time::Instant::now();
@@ -104,6 +104,8 @@ fn main() {
             max_radius,
             true,
         );
+        println!("time to find ball: {:.3} ms", t0.elapsed().as_micros() as f32 / 1000f32);
+
         virtual_time += 1. / 149.;
         overlay_images.push(original_undistorted_image.clone());
         #[derive(Copy, Clone, Debug)]
