@@ -1,142 +1,198 @@
-use std::slice;
-
-/// Converts unpacked BayerRG12 raw data (12-bit values in 16-bit words, RGGB pattern) to RGB8 (8-bit per channel).
+/// Converts BayerRG12p raw data (packed 12-bit, RGGB pattern) to RGB8 (8-bit per channel).
 ///
 /// # Arguments
-/// * `raw_data` - Byte slice containing the unpacked BayerRG12 data (length must be width * height * 2).
-/// * `width` - Image width in pixels.
+/// * `raw_data` - Byte slice containing the packed BayerRG12p data.
+/// * `width` - Image width in pixels (must be even for standard packing).
 /// * `height` - Image height in pixels.
+/// * `reverse_bits` - If true, reverses nibble order in unpacking (for non-standard SDKs).
 ///
 /// # Panics
-/// Panics if the input data length does not match the expected size (width * height * 2).
+/// Panics if dimensions invalid or data length mismatch.
 ///
 /// # Notes
-/// - Assumes data is big-endian or little-endian u16? Rust slice assumes host endian; for USB Vision, typically little-endian.
-///   If needed, use byteorder crate for explicit endianness (not included here).
-/// - Uses a simple bilinear interpolation debayering algorithm.
-/// - Scales 12-bit values to 8-bit by right-shifting 4 bits (simple truncation).
-/// - Output is a flat Vec<u8> with RGB pixels in row-major order (r, g, b per pixel).
-/// - Based on your buffer size (792064 = 728 * 544 * 2), this handles unpacked 16-bit format.
-/// - If data is packed (1.5 bpp), adjust by slicing only the first (width * height * 3 / 2) bytes and use the previous version.
-pub fn bayer_rg12_to_rgb8(raw_data: &[u8], width: usize, height: usize) -> Vec<u8> {
-    let expected_len = width * height * 2;
-    assert_eq!(raw_data.len(), expected_len, "Input data length mismatch: expected unpacked 16-bit BayerRG12");
+/// - Standard GenICam packing: 3 bytes/2 pixels (pix1: b0<<4 | b1>>4; pix2: (b1&0x0F)<<8 | b2).
+/// - Clamps to 12-bit range (0-4095) to prevent overflow artifacts.
+/// - Improved bilinear: Weighted diagonals (opposite ones averaged separately if needed) for less moiré.
+/// - Debug: Prints first few unpacked pixels to console (remove for production).
+/// - Output: Row-major RGB (r,g,b).
+pub fn bayer_rg12p_to_rgb8(raw_data: &[u8], width: usize, height: usize, reverse_bits: bool) -> Vec<u8> {
+    assert!(width % 2 == 0, "Width must be even");
+    let num_pixels = width * height;
+    let expected_len = (num_pixels * 3) / 2;
+    assert_eq!(raw_data.len(), expected_len, "Data length mismatch: expected {} bytes", expected_len);
 
-    // Step 1: Unpack 16-bit Bayer values into a flat u16 vector (RGGB pattern).
-    // Assumes little-endian (common for USB); if big-endian, swap bytes or use byteorder.
-    let bayer: Vec<u16> = unsafe {
-        std::slice::from_raw_parts(raw_data.as_ptr() as *const u16, width * height)
-    }.iter()
-        .map(|&v| v & 0x0FFF)  // Mask to 12 bits if high bits have junk, but typically they are 0
-        .collect();
+    // Step 1: Unpack with optional bit reversal.
+    let mut bayer = vec![0u16; num_pixels];
+    for y in 0..height {
+        let row_bytes = (width * 3) / 2;
+        let mut byte_idx = y * row_bytes;
+        for x in (0..width).step_by(2) {
+            if byte_idx + 2 >= raw_data.len() {
+                panic!("Buffer overrun at y={}, x={}", y, x);
+            }
+            let b0 = raw_data[byte_idx] as u16;
+            let b1 = raw_data[byte_idx + 1] as u16;
+            let b2 = raw_data[byte_idx + 2] as u16;
+            let (pix1, pix2) = if reverse_bits {
+                // Alternative: Sometimes SDKs pack low bits first (pix1: (b1 & 0x0F)<<8 | b0; pix2: b2<<4 | (b1>>4))
+                let pix1_alt = ((b1 & 0x0F) << 8) | b0;
+                let pix2_alt = (b2 << 4) | (b1 >> 4);
+                (pix1_alt, pix2_alt)
+            } else {
+                // Standard GenICam
+                let pix1_std = (b0 << 4) | (b1 >> 4);
+                let pix2_std = ((b1 & 0x0F) << 8) | b2;
+                (pix1_std, pix2_std)
+            };
+            let val1 = pix1.clamp(0, 4095);  // Clamp to 12-bit
+            let val2 = pix2.clamp(0, 4095);
+            let idx1 = y * width + x;
+            let idx2 = idx1 + 1;
+            bayer[idx1] = val1;
+            bayer[idx2] = val2;
+            byte_idx += 3;
 
-    // Step 2: Debayer to RGB using bilinear interpolation.
-    let mut rgb = vec![0u8; width * height * 3];
+            // // Debug: Print first row's first few pixels (remove after testing)
+            // if y == 0 && x < 4 {
+            //     println!("Unpacked pixel ({},{}): {}, ({},{}): {}", x, y, val1, x+1, y, val2);
+            // }
+        }
+    }
+
+    // Step 2: Debayer with improved bilinear (weighted opposite diagonals for better color).
+    let mut rgb = vec![0u8; num_pixels * 3];
     for y in 0..height {
         for x in 0..width {
-            let bayer_idx = y * width + x;
-            let is_r_pos = (y % 2 == 0) && (x % 2 == 0);
-            let is_b_pos = (y % 2 == 1) && (x % 2 == 1);
-            // G pos is the else case.
+            let idx = y * width + x;
+            let is_r = (y % 2 == 0) && (x % 2 == 0);
+            let is_b = (y % 2 == 1) && (x % 2 == 1);
+            let is_g_h = !is_r && (x % 2 == 1);  // Horizontal G (even y, odd x)
+            let is_g_v = !is_b && (x % 2 == 0);  // Vertical G (odd y, even x)
 
-            let mut red: u16 = 0;
-            let mut green: u16 = 0;
-            let mut blue: u16 = 0;
+            let mut r: u16 = bayer[idx];
+            let mut g: u16 = bayer[idx];
+            let mut b: u16 = bayer[idx];
 
-            if is_r_pos {
-                // R position (even, even): R = raw, G = avg adjacent G, B = avg diagonal B
-                red = bayer[bayer_idx];
-                // Avg G (left, right, up, down)
-                let mut sum_g = 0u32;
-                let mut cnt_g = 0u32;
-                if x > 0 { sum_g += bayer[y * width + x - 1] as u32; cnt_g += 1; }
-                if x + 1 < width { sum_g += bayer[y * width + x + 1] as u32; cnt_g += 1; }
-                if y > 0 { sum_g += bayer[(y - 1) * width + x] as u32; cnt_g += 1; }
-                if y + 1 < height { sum_g += bayer[(y + 1) * width + x] as u32; cnt_g += 1; }
-                green = if cnt_g > 0 { (sum_g / cnt_g) as u16 } else { 0 };
-                // Avg B (diagonals: up-left, up-right, down-left, down-right; these are B positions for R)
-                let mut sum_b = 0u32;
-                let mut cnt_b = 0u32;
-                for dy in [-1i32, 1i32] {
-                    for dx in [-1i32, 1i32] {
-                        let nx = (x as i32) + dx;
-                        let ny = (y as i32) + dy;
-                        if nx >= 0 && nx < (width as i32) && ny >= 0 && ny < (height as i32) {
-                            sum_b += bayer[(ny as usize) * width + (nx as usize)] as u32;
-                            cnt_b += 1;
-                        }
-                    }
-                }
-                blue = if cnt_b > 0 { (sum_b / cnt_b) as u16 } else { 0 };
-            } else if is_b_pos {
-                // B position (odd, odd): B = raw, G = avg adjacent G, R = avg diagonal R
-                blue = bayer[bayer_idx];
-                // Avg G (same as above)
-                let mut sum_g = 0u32;
-                let mut cnt_g = 0u32;
-                if x > 0 { sum_g += bayer[y * width + x - 1] as u32; cnt_g += 1; }
-                if x + 1 < width { sum_g += bayer[y * width + x + 1] as u32; cnt_g += 1; }
-                if y > 0 { sum_g += bayer[(y - 1) * width + x] as u32; cnt_g += 1; }
-                if y + 1 < height { sum_g += bayer[(y + 1) * width + x] as u32; cnt_g += 1; }
-                green = if cnt_g > 0 { (sum_g / cnt_g) as u16 } else { 0 };
-                // Avg R (diagonals: same positions, which are R for B)
-                let mut sum_r = 0u32;
-                let mut cnt_r = 0u32;
-                for dy in [-1i32, 1i32] {
-                    for dx in [-1i32, 1i32] {
-                        let nx = (x as i32) + dx;
-                        let ny = (y as i32) + dy;
-                        if nx >= 0 && nx < (width as i32) && ny >= 0 && ny < (height as i32) {
-                            sum_r += bayer[(ny as usize) * width + (nx as usize)] as u32;
-                            cnt_r += 1;
-                        }
-                    }
-                }
-                red = if cnt_r > 0 { (sum_r / cnt_r) as u16 } else { 0 };
-            } else {
-                // G position
-                green = bayer[bayer_idx];
-                let is_horiz_g = (x % 2 == 1) && (y % 2 == 0);  // Odd x, even y: horizontal G line
-                if is_horiz_g {
-                    // R from horizontal neighbors (even x)
-                    let mut sum_r = 0u32;
-                    let mut cnt_r = 0u32;
-                    if x > 0 { sum_r += bayer[y * width + x - 1] as u32; cnt_r += 1; }
-                    if x + 1 < width { sum_r += bayer[y * width + x + 1] as u32; cnt_r += 1; }
-                    red = if cnt_r > 0 { (sum_r / cnt_r) as u16 } else { 0 };
-                    // B from vertical neighbors (odd y, same x = odd; but for horiz G, vertical are B? Wait, vertical neighbors are odd y, odd x? No.
-                    // Correction: for horiz G (y even, x odd), up/down (y odd, x odd) are B positions.
-                    let mut sum_b = 0u32;
-                    let mut cnt_b = 0u32;
-                    if y > 0 { sum_b += bayer[(y - 1) * width + x] as u32; cnt_b += 1; }
-                    if y + 1 < height { sum_b += bayer[(y + 1) * width + x] as u32; cnt_b += 1; }
-                    blue = if cnt_b > 0 { (sum_b / cnt_b) as u16 } else { 0 };
-                } else {
-                    // Vertical G (even x, odd y): B from horizontal neighbors (odd x), R from vertical (even y, even x)
-                    let mut sum_b = 0u32;
-                    let mut cnt_b = 0u32;
-                    if x > 0 { sum_b += bayer[y * width + x - 1] as u32; cnt_b += 1; }
-                    if x + 1 < width { sum_b += bayer[y * width + x + 1] as u32; cnt_b += 1; }
-                    blue = if cnt_b > 0 { (sum_b / cnt_b) as u16 } else { 0 };
-                    let mut sum_r = 0u32;
-                    let mut cnt_r = 0u32;
-                    if y > 0 { sum_r += bayer[(y - 1) * width + x] as u32; cnt_r += 1; }
-                    if y + 1 < height { sum_r += bayer[(y + 1) * width + x] as u32; cnt_r += 1; }
-                    red = if cnt_r > 0 { (sum_r / cnt_r) as u16 } else { 0 };
-                }
+            if is_r {
+                // R: r=raw, g=avg adj G, b=avg diag B (improve: avg UL/DR vs UR/DL if uneven)
+                r = bayer[idx];
+                g = avg_g_ortho(&bayer, x, y, width, height);
+                b = avg_diag_b(&bayer, x, y, width, height, is_r);
+            } else if is_b {
+                // B: b=raw, g=avg adj G, r=avg diag R
+                b = bayer[idx];
+                g = avg_g_ortho(&bayer, x, y, width, height);
+                r = avg_diag_b(&bayer, x, y, width, height, is_r);  // Reuse for R, swap logic
+            } else if is_g_h {
+                // Horiz G: g=raw, r=avg left/right R, b=avg up/down B
+                g = bayer[idx];
+                r = avg_horiz_even(&bayer, x, y, width, height);  // left/right: R
+                b = avg_vert_odd(&bayer, x, y, width, height);    // up/down: B
+            } else {  // is_g_v
+                // Vert G: g=raw, b=avg left/right B, r=avg up/down R
+                g = bayer[idx];
+                b = avg_horiz_odd(&bayer, x, y, width, height);   // left/right: B
+                r = avg_vert_even(&bayer, x, y, width, height);   // up/down: R
             }
 
-            // Scale to 8-bit and store (row-major RGB)
-            let rgb_idx = (y * width + x) * 3;
-            rgb[rgb_idx] = (red >> 4) as u8;
-            rgb[rgb_idx + 1] = (green >> 4) as u8;
-            rgb[rgb_idx + 2] = (blue >> 4) as u8;
+            // Clamp and scale to 8-bit (>>4 truncates high 4 bits)
+            let r8 = (r >> 4).clamp(0, 255) as u8;
+            let g8 = (g >> 4).clamp(0, 255) as u8;
+            let b8 = (b >> 4).clamp(0, 255) as u8;
+
+            let rgb_idx = idx * 3;
+            rgb[rgb_idx] = r8;
+            rgb[rgb_idx + 1] = g8;
+            rgb[rgb_idx + 2] = b8;
         }
     }
 
     rgb
 }
 
+// Helper: Avg orthogonal G (left/right/up/down)
+fn avg_g_ortho(bayer: &[u16], x: usize, y: usize, width: usize, height: usize) -> u16 {
+    let mut sum = 0u32;
+    let mut cnt = 0u32;
+    if x > 0 { sum += bayer[y * width + x - 1] as u32; cnt += 1; }
+    if x + 1 < width { sum += bayer[y * width + x + 1] as u32; cnt += 1; }
+    if y > 0 { sum += bayer[(y - 1) * width + x] as u32; cnt += 1; }
+    if y + 1 < height { sum += bayer[(y + 1) * width + x] as u32; cnt += 1; }
+    if cnt > 0 { (sum / cnt) as u16 } else { 0 }
+}
+
+// Helper: Avg diagonal B for R pos (or R for B pos via param)
+fn avg_diag_b(bayer: &[u16], x: usize, y: usize, width: usize, height: usize, is_r: bool) -> u16 {
+    let mut sum_ul_dr = 0u32;  // Upper-left + down-right
+    let mut sum_ur_dl = 0u32;  // Upper-right + down-left
+    let mut cnt1 = 0u32;
+    let mut cnt2 = 0u32;
+
+    // UL
+    if x >= 1 && y >= 1 {
+        let val = bayer[(y - 1) * width + (x - 1)] as u32;
+        sum_ul_dr += val;
+        cnt1 += 1;
+    }
+    // DR
+    if x + 1 < width && y + 1 < height {
+        let val = bayer[(y + 1) * width + (x + 1)] as u32;
+        sum_ul_dr += val;
+        cnt1 += 1;
+    }
+    // UR
+    if x + 1 < width && y >= 1 {
+        let val = bayer[(y - 1) * width + (x + 1)] as u32;
+        sum_ur_dl += val;
+        cnt2 += 1;
+    }
+    // DL
+    if x >= 1 && y + 1 < height {
+        let val = bayer[(y + 1) * width + (x - 1)] as u32;
+        sum_ur_dl += val;
+        cnt2 += 1;
+    }
+
+    let avg1 = if cnt1 > 0 { (sum_ul_dr / cnt1) as u16 } else { 0 };
+    let avg2 = if cnt2 > 0 { (sum_ur_dl / cnt2) as u16 } else { 0 };
+    (avg1 + avg2) / 2  // Average the two diagonal pairs for smoother result
+}
+
+// Horiz even: Avg left/right (R positions)
+fn avg_horiz_even(bayer: &[u16], x: usize, y: usize, width: usize, _height: usize) -> u16 {
+    let mut sum = 0u32;
+    let mut cnt = 0u32;
+    if x > 0 { sum += bayer[y * width + x - 1] as u32; cnt += 1; }
+    if x + 1 < width { sum += bayer[y * width + x + 1] as u32; cnt += 1; }
+    if cnt > 0 { (sum / cnt).clamp(0, 4095) as u16 } else { 0 }
+}
+
+// Horiz odd: Avg left/right (B positions)
+fn avg_horiz_odd(bayer: &[u16], x: usize, y: usize, width: usize, _height: usize) -> u16 {
+    let mut sum = 0u32;
+    let mut cnt = 0u32;
+    if x > 0 { sum += bayer[y * width + x - 1] as u32; cnt += 1; }
+    if x + 1 < width { sum += bayer[y * width + x + 1] as u32; cnt += 1; }
+    if cnt > 0 { (sum / cnt).clamp(0, 4095) as u16 } else { 0 }
+}
+
+// Vert even: Avg up/down (R positions)
+fn avg_vert_even(bayer: &[u16], x: usize, y: usize, width: usize, height: usize) -> u16 {
+    let mut sum = 0u32;
+    let mut cnt = 0u32;
+    if y > 0 { sum += bayer[(y - 1) * width + x] as u32; cnt += 1; }
+    if y + 1 < height { sum += bayer[(y + 1) * width + x] as u32; cnt += 1; }
+    if cnt > 0 { (sum / cnt).clamp(0, 4095) as u16 } else { 0 }
+}
+
+// Vert odd: Avg up/down (B positions)
+fn avg_vert_odd(bayer: &[u16], x: usize, y: usize, width: usize, height: usize) -> u16 {
+    let mut sum = 0u32;
+    let mut cnt = 0u32;
+    if y > 0 { sum += bayer[(y - 1) * width + x] as u32; cnt += 1; }
+    if y + 1 < height { sum += bayer[(y + 1) * width + x] as u32; cnt += 1; }
+    if cnt > 0 { (sum / cnt).clamp(0, 4095) as u16 } else { 0 }
+}
 pub fn save_rgb8_image(p0: &String, p1: &Vec<u8>, p2: usize, p3: usize) -> Result<(), std::io::Error> {
     use image::{ImageBuffer, Rgb};
     let img_buffer: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(p2 as u32, p3 as u32, p1.clone())
