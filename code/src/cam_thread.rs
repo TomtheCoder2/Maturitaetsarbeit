@@ -1,10 +1,13 @@
+use std::fmt::format;
+use std::io::Write;
 use crate::arduino_com::ArduinoCom;
 use crate::ball::{standard_selection, BallComp};
 use crate::live_feed::Command::*;
 use crate::live_feed::{
-    subtract_image, Command, Selection, FOLLOWBALL, FPS, IMAGE_BUFFER,
-    IMAGE_BUFFER_UNDISTORTED, PAUSEPLAYER, PAUSESHOOTING, TIMING_OFFSET,
+    subtract_image, Command, Selection, FOLLOWBALL, FPS, IMAGE_BUFFER, IMAGE_BUFFER_UNDISTORTED,
+    PAUSEPLAYER, PAUSESHOOTING, TIMING_OFFSET,
 };
+use cameleon::genapi::NodeStore;
 use cameleon::u3v::{ControlHandle, StreamHandle};
 use cameleon::Camera;
 use egui::ColorImage;
@@ -13,6 +16,8 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Instant;
+use cameleon_genapi::interface::INode;
+use crate::image_utils::bayer_rg12_to_rgb8;
 
 pub fn set_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String, value: f64) {
     let mut params_ctxt = camera.params_ctxt().unwrap();
@@ -46,6 +51,149 @@ pub fn set_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String,
         let value = exposure.value(&mut params_ctxt).unwrap();
         println!("New {name} {}", value);
     }
+}
+
+pub fn set_value_i64(camera: &mut Camera<ControlHandle, StreamHandle>, name: String, value: i64) {
+    let mut params_ctxt = camera.params_ctxt().unwrap();
+    let exposure = params_ctxt
+        .node(&*name)
+        .unwrap()
+        .as_integer(&params_ctxt)
+        .unwrap();
+    if exposure.is_readable(&mut params_ctxt).unwrap() {
+        let value = exposure.value(&mut params_ctxt).unwrap();
+        println!("{name}: {}", value);
+    }
+    if exposure.is_writable(&mut params_ctxt).unwrap() {
+        exposure.set_value(&mut params_ctxt, value).unwrap();
+    } else {
+        println!("{name} is not writable");
+    }
+    if exposure.is_readable(&mut params_ctxt).unwrap() {
+        let value = exposure.value(&mut params_ctxt).unwrap();
+        println!("New {name} {}", value);
+    }
+}
+
+pub fn set_enum_value(
+    camera: &mut Camera<ControlHandle, StreamHandle>,
+    name: &str,
+    value: &str,
+) {
+    let mut params_ctxt = camera.params_ctxt().unwrap();
+    let enum_node = params_ctxt
+        .node(name)
+        .unwrap()
+        .as_enumeration(&params_ctxt)
+        .unwrap();
+
+    if enum_node.is_writable(&mut params_ctxt).unwrap() {
+        if let Err(e) = enum_node.set_entry_by_symbolic(&mut params_ctxt, value) {
+            println!("Failed to set {} to {}: {}", name, value, e);
+        }
+    } else {
+        println!("{} is not writable", name);
+    }
+
+    if enum_node.is_readable(&mut params_ctxt).unwrap() {
+        let current_value = enum_node.current_entry(&mut params_ctxt).unwrap();
+        println!("New {}: {:?}", name, current_value);
+    }
+}
+
+
+pub fn execute_command(camera: &mut Camera<ControlHandle, StreamHandle>, name: &str) {
+    let mut params_ctxt = camera.params_ctxt().unwrap();
+    let command_node = params_ctxt
+        .node(name)
+        .unwrap()
+        .as_command(&params_ctxt)
+        .unwrap();
+
+    if command_node.is_writable(&mut params_ctxt).unwrap() {
+        if let Err(e) = command_node.execute(&mut params_ctxt) {
+            println!("Failed to execute command {}: {}", name, e);
+        } else {
+            println!("Executed command: {}", name);
+        }
+    } else {
+        println!("Command {} is not executable", name);
+    }
+}
+
+
+pub fn print_all_options(camera: &mut Camera<ControlHandle, StreamHandle>) {
+    let mut options_file = std::fs::File::create("camera_options.txt").unwrap();
+    let mut params_ctxt = camera.params_ctxt().unwrap();
+    params_ctxt.node_store().visit_nodes(|node| {
+        // Print debug info for each node (most implementations include the node name)
+        // println!("{:?}", node);
+        options_file.write_all(format!("{:#?}\n", node).as_bytes()).unwrap();
+
+        // node: &NodeData: is an enum with enum types:
+        // #[derive(Debug, Clone)]
+        // pub enum NodeData {
+        //     Node(Box<Node>),
+        //     Category(Box<CategoryNode>),
+        //     Integer(Box<IntegerNode>),
+        //     IntReg(Box<IntRegNode>),
+        //     MaskedIntReg(Box<MaskedIntRegNode>),
+        //     Boolean(Box<BooleanNode>),
+        //     Command(Box<CommandNode>),
+        //     Enumeration(Box<EnumerationNode>),
+        //     EnumEntry(Box<EnumEntryNode>),
+        //     Float(Box<FloatNode>),
+        //     FloatReg(Box<FloatRegNode>),
+        //     String(Box<StringNode>),
+        //     StringReg(Box<StringRegNode>),
+        //     Register(Box<RegisterNode>),
+        //     Converter(Box<ConverterNode>),
+        //     IntConverter(Box<IntConverterNode>),
+        //     SwissKnife(Box<SwissKnifeNode>),
+        //     IntSwissKnife(Box<IntSwissKnifeNode>),
+        //     Port(Box<PortNode>),
+        //
+        //     // TODO: Implement DCAM specific ndoes.
+        //     ConfRom(()),
+        //     TextDesc(()),
+        //     IntKey(()),
+        //     AdvFeatureLock(()),
+        //     SmartFeature(()),
+        use cameleon_genapi::store::NodeData::*;
+        match node {
+            // Node(_)
+            // | Category(_)
+            | Integer(_)
+            // | IntReg(_)
+            // | MaskedIntReg(_)
+            // | Boolean(_)
+            // | Command(_) | Enumeration(_) | EnumEntry(_) | Float(_) | FloatReg(_)
+            // | String(_)
+            // | StringReg(_)
+            => {
+                // println!("{:?}", node);
+            }
+            _ => {}
+        }
+        match node {
+            Integer(i) => {
+                let desc = i.node_base().description().unwrap_or("No description");
+                let name = i.node_base().display_name();
+                if desc.contains("pixels") {
+                    println!("int: name: {:?}, Description: {:?}", name, desc);
+                }
+                // println!("{:?}", i.node_base().description().unwrap_or("No description"));
+            }
+            String(s) => {
+                let desc = s.node_base().description().unwrap_or("No description");
+                let name = s.node_base().display_name();
+                if desc.to_ascii_lowercase().contains("format") {
+                    println!("string: name: {:?}, Description: {:?}", name, desc);
+                }
+            }
+            _ => {}
+        }
+    });
 }
 
 pub fn load_raw() -> ColorImage {
@@ -124,6 +272,10 @@ impl CamThread {
         set_value(&mut camera, "ExposureTime".to_string(), 1. * 1e6 / 30.0);
         // set_value(&mut camera, "AcquisitionFrameRate".to_string(), 300.0);
         // get_value(&mut camera, "DeviceLinkThroughputLimitMode".to_string());
+
+        execute_command(&mut camera, "AcquisitionStop");
+        set_enum_value(&mut camera, "PixelFormat", "BayerRG12");
+        execute_command(&mut camera, "AcquisitionStart");
 
         // Start streaming. Channel capacity is set to 3.
         let payload_rx = camera.start_streaming(3).unwrap();
@@ -253,13 +405,7 @@ impl CamThread {
                         // println!("Moving to center");
                         // arduino_com.send_string(&format!("{}", 212 as i32));
                         // arduino_com.send_string(&"check 10".to_string());
-                        move_y(
-                            y,
-                            arduino_com,
-                            last_command,
-                            min_pixel,
-                            max_pixel,
-                        );
+                        move_y(y, arduino_com, last_command, min_pixel, max_pixel);
                         *last_command = Instant::now();
                     }
                 }
@@ -301,18 +447,14 @@ impl CamThread {
                                 .chunks(4)
                                 .map(|x| x[0..3].to_vec())
                                 .flatten()
-                                .collect::<Vec<u8>>().into_boxed_slice();
+                                .collect::<Vec<u8>>()
+                                .into_boxed_slice();
                             raw_image = &raw_image_owned_boxed_slice;
                             // let raw_image1 = raw_image1.as_slice();
                             // raw_image = raw_image1.clone();
                         }
                         MoveCenter => {
-                            move_center(
-                                &mut arduino_com,
-                                &mut last_command,
-                                min_pixel,
-                                max_pixel,
-                            );
+                            move_center(&mut arduino_com, &mut last_command, min_pixel, max_pixel);
                             moved_to_center = true;
                         }
                         Shoot => {
@@ -455,21 +597,18 @@ impl CamThread {
                 //     payload.timestamp()
                 // );
                 // let mut current_player_pos;
-                if let Some(_image_info) = payload.image_info() {
+                if let Some(image_info) = payload.image_info() {
                     // println!("{:?}\n", image_info);
                     // let width = image_info.width;
                     // let height = image_info.height;
 
                     let image = payload.image();
-                    if let Some(image) = image {
-                        // let old_height = height;
-                        // let height = 700;
-                        // let width = (width as f32 / old_height as f32 * height as f32) as u32;
-                        // println!("Width: {}, Height: {}", width, height);
-                        // let undistorted_image =
-                        // undistort_image(&image, 30, width as u32, height as u32);
-                        // buffer.2.clear();
-                        // buffer.2.extend_from_slice(&undistorted_image);
+                    if let Some(image_rg12) = image {
+                        let image = &bayer_rg12_to_rgb8(
+                            image_rg12,
+                            image_info.width as usize,
+                            image_info.height as usize,
+                        );
                         crate::undistort_image_table(
                             image,
                             &mut undistorted_image,

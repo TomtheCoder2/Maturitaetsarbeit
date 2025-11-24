@@ -7,6 +7,7 @@ edition = "2021"
 image = "0.24.8"
 imageproc = "0.23.0"
 cameleon = { version = "0.1.10", features = ["libusb"] }
+cameleon-genapi = "0.1.14"
 #cameleon = { git = "https://github.com/cameleon-rs/cameleon/", branch = "fix-clippy-1.79", features = ["libusb"] }
 #cameleon = { path = "./cameleon/cameleon", features = ["libusb"] }
 serialport = "3.3.0"
@@ -29,6 +30,8 @@ chrono = "0.4.38"
 egui_extras = "0.27.1"
 atomic_float = "1.1.0"
 env_logger = "0.11.8"
+
+rustyline = "17.0.2"
 
 [profile.release]
 debug = 1

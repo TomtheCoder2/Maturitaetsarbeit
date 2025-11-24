@@ -11,6 +11,7 @@ pub mod detect_player;
 pub mod cam_thread;
 pub mod live_feed;
 pub mod plot;
+pub mod image_utils;
 
 /// Camera matrix and distortion coefficients from calibration
 const CAMERA_MATRIX: [[f64; 3]; 3] = [
@@ -330,7 +331,7 @@ pub fn undistort_image_table(
             #[inline]
             /// Helper function to avoid code duplication
             fn set_pixel(undistorted_img: &mut [u8], img: &[u8], pixel_index: usize, i: usize) {
-                undistorted_img[i as usize] = img[pixel_index];
+                undistorted_img[i] = img[pixel_index];
             }
             let pixel_index = index as usize;
             set_pixel(undistorted_img, img, pixel_index, i as usize * 3);
