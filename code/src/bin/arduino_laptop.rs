@@ -109,15 +109,24 @@ fn main() {
                     .parse::<f64>()
                     .unwrap()
                     / 1000.0;
+                let counter = line
+                    .trim()
+                    .split_whitespace()
+                    .nth(2)
+                    .unwrap()
+                    .parse::<u32>()
+                    .unwrap();
                 let actual_pos = com.get_pos_sync(true) as i32;
                 actual_positions.push((t00.elapsed().as_secs_f64(), actual_pos as f64));
                 let actual_pos = com.get_pos() as i32;
                 println!(
-                    "sent {}, actual pos: {}, diff: {} in {:.3}s",
+                    "sent {}, actual pos: {}, diff: {} in {:.3}s with {} steps, ie. actual avg delay: {:.3}us",
                     pos,
                     actual_pos,
                     actual_pos.abs_diff(*pos),
-                    time_taken
+                    time_taken,
+                    counter,
+                    time_taken * 1_000_000.0 / counter as f64
                 );
                 total_diff += actual_pos.abs_diff(*pos);
                 total_time += time_taken;

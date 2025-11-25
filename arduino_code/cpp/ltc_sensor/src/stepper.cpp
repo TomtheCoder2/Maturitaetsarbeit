@@ -51,17 +51,23 @@ void stepper::loop() {
     } else if (abs(error) <= minError) {
         // turn off motor
         digitalWrite(enPin, HIGH);
+        enabled = false;
         integral = 0;
         arrived_counter++;
         if (!reached_target && arrived_counter >= 5) {
-            Serial.println("t: " + String(millis() - move_start_time_ms));
+            Serial.println("t: " + String(millis() - move_start_time_ms) + " " + String(counter));
             reached_target = true;
         }
     }
+    counter++;
 }
 
 // lets define speed as a float between 0 and 1, 0 meaning largest pulseWidth and 1 meaning smallest pulseWidth
 void stepper::step(const int direction, const float speed, const int a_minPulseWidth) {
+    if (current_ltc_value < MIN_LTC || current_ltc_value > MAX_LTC) {
+        // out of bounds, do not step
+        return;
+    }
     const int targetPulseWidth = map(speed * 1000, 0, 1000, maxPulseWidth, a_minPulseWidth);
     if (direction == current_direction) {
         if (pulseWidth < targetPulseWidth) {
@@ -73,14 +79,21 @@ void stepper::step(const int direction, const float speed, const int a_minPulseW
         current_direction = direction;
         pulseWidth = maxPulseWidth;
     }
-    digitalWrite(dirXPin, direction);
+    // only change direction if it is different from last time
+    if (direction != last_direction) {
+        digitalWrite(dirXPin, direction);
+        last_direction = direction;
+    }
 
-    digitalWrite(enPin, LOW);
+    if (!enabled) {
+        digitalWrite(enPin, LOW);
+        enabled = true;
+    }
     // Step the motor for each half-step
     digitalWrite(stepXPin, HIGH);
     delayMicroseconds(pulseWidth);
     digitalWrite(stepXPin, LOW);
-    delayMicroseconds(pulseWidth);
+    // delayMicroseconds(pulseWidth);
 }
 
 
@@ -90,4 +103,5 @@ void stepper::set_target(int input_int) {
     reached_target = false;
     move_start_time_ms = millis();
     arrived_counter = 0;
+    counter = 0;
 }
