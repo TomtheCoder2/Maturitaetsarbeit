@@ -18,7 +18,7 @@ fn main() {
 
     // Step 1: Compile Metal shader to AIR
     let output = Command::new("xcrun")
-        .args(&[
+        .args([
             "metal",
             "-c",  // Compile only
             metal_source.to_str().expect("Metal source path invalid"),
@@ -45,7 +45,7 @@ fn main() {
 
     // Step 2: Create metallib from AIR
     let output2 = Command::new("xcrun")
-        .args(&[
+        .args([
             "metallib",
             &*air_file.to_str().expect("AIR path invalid").to_string(),
             "-o", &*metallib_file.to_str().expect("metallib path invalid").to_string(),

@@ -161,8 +161,8 @@ pub fn undistort_image(img: &[u8], num_threads: u32, width: u32, height: u32) ->
             };
             for x in 0..new_width {
                 // Map the pixel back to the distorted image coordinates
-                let original_x = (x as f64 + min_x as f64) as f64;
-                let original_y = (y as f64 + min_y as f64) as f64;
+                let original_x = x as f64 + min_x as f64;
+                let original_y = y as f64 + min_y as f64;
 
                 // Get the corresponding distorted coordinates
                 let (distorted_x, distorted_y) =
@@ -237,7 +237,7 @@ pub fn increment_last_number_in_filename(file_path: &str) -> Option<String> {
     let mut last_number_start = None;
     let mut last_number_end = None;
     for (i, c) in file_name.char_indices().rev() {
-        if c.is_digit(10) {
+        if c.is_ascii_digit() {
             if last_number_end.is_none() {
                 last_number_end = Some(i + c.len_utf8());
             }
@@ -314,7 +314,7 @@ pub fn gen_table(
 pub fn undistort_image_table(
     img: &[u8],
     undistorted_img: &mut [u8],
-    table: &Vec<i32>,
+    table: &[i32],
     new_width: u32,
     new_height: u32,
 ) {
@@ -341,7 +341,7 @@ pub fn undistort_image_table(
     }
 }
 
-pub fn undistort_image_table_old(img: &[u8], table: &Vec<(usize, i32)>) -> RgbImage {
+pub fn undistort_image_table_old(img: &[u8], table: &[(usize, i32)]) -> RgbImage {
     let width = 728;
     let height = 544;
 
@@ -431,8 +431,8 @@ pub fn gen_table_old(width: u32, height: u32) -> Vec<(usize, i32)> {
     for y in 0..new_height {
         for x in 0..new_width {
             // Map the pixel back to the distorted image coordinates
-            let original_x = (x as f64 + min_x) as f64;
-            let original_y = (y as f64 + min_y) as f64;
+            let original_x = x as f64 + min_x;
+            let original_y = y as f64 + min_y;
 
             // Get the corresponding distorted coordinates
             let (distorted_x, distorted_y) = distort_coords(original_x, original_y, fx, fy, cx, cy);

@@ -5,6 +5,12 @@ pub struct PythonScript {
     process: std::process::Child,
 }
 
+impl Default for PythonScript {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PythonScript {
     pub fn new() -> Self {
         let python_process = Command::new("python")
@@ -25,7 +31,7 @@ impl PythonScript {
         if let Some(ref mut stdin) = self.process.stdin {
             // println!("Got stdin.");
             // Send the image data to Python over stdin
-            stdin.write_all(&img).expect("Failed to write to stdin");
+            stdin.write_all(img).expect("Failed to write to stdin");
             stdin.flush().expect("Failed to flush stdin");
         } else {
             panic!("Failed to open stdin");

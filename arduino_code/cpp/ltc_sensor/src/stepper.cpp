@@ -14,6 +14,11 @@ void stepper::setup() {
 }
 
 void stepper::loop() {
+    // step();
+    // if (last_loop_time_us + PID_LOOP_INTERVAL_US > micros()) {
+    //     return;
+    // }
+    // last_loop_time_us = micros();
     // read analog pin A15 and print its value
     current_ltc_value = analogRead(ltc_analogPin); // read the input pin
     const float error = (float) (target_ltc_value - current_ltc_value);
@@ -26,13 +31,13 @@ void stepper::loop() {
         integral = -integral_max;
     }
     float p_gain, i_gain, d_gain;
-    // adapted minPulseWidth based on error
-    int a_minPulseWidth = minPulseWidth;
+    // adapted minPulseWidth and pid based on error
     if (abs(error) > 30) {
         // Large error: use aggressive gains
         p_gain = p * 10;
         i_gain = i;
         d_gain = d * 3;
+        a_minPulseWidth = minPulseWidth;
     } else {
         // Small error: use conservative gains for stability
         p_gain = p;
@@ -44,9 +49,12 @@ void stepper::loop() {
     last_error = error;
     // Serial.print("Control signal: ");Serial.println(control_signal);
     if (abs(control_signal) > 0.00 && abs(error) > minError) {
-        int direction = (control_signal < 0) ? HIGH : LOW;
-        step(direction, min(abs(control_signal) / 0.2, 1.0), a_minPulseWidth);
-        // step(direction, 0.5);
+        // if signal is positive, move in LOW direction, else HIGH direction
+        direction = (control_signal > 0) ? LOW : HIGH;
+        target_speed = min(abs(control_signal) / 0.2, 1.0);
+        for (int i = 0; i < 5; i++)
+            step(true);
+        step();
         arrived_counter = 0;
     } else if (abs(error) <= minError) {
         // turn off motor
@@ -55,20 +63,25 @@ void stepper::loop() {
         integral = 0;
         arrived_counter++;
         if (!reached_target && arrived_counter >= 5) {
-            Serial.println("t: " + String(millis() - move_start_time_ms) + " " + String(counter));
+            Serial.println(
+                "t: " + String(millis() - move_start_time_ms) + " " + String(counter) + " " + String(pid_loop_counter));
             reached_target = true;
         }
     }
-    counter++;
+    pid_loop_counter++;
 }
 
 // lets define speed as a float between 0 and 1, 0 meaning largest pulseWidth and 1 meaning smallest pulseWidth
-void stepper::step(const int direction, const float speed, const int a_minPulseWidth) {
-    if (current_ltc_value < MIN_LTC || current_ltc_value > MAX_LTC) {
-        // out of bounds, do not step
+void stepper::step(bool do_delay_at_end) {
+    if (current_ltc_value < MIN_LTC && direction == HIGH) {
+        // Serial.println("Min LTC reached");
         return;
     }
-    const int targetPulseWidth = map(speed * 1000, 0, 1000, maxPulseWidth, a_minPulseWidth);
+    if (current_ltc_value > MAX_LTC && direction == LOW) {
+        // Serial.println("Max LTC reached");
+        return;
+    }
+    const int targetPulseWidth = map(target_speed * 1000, 0, 1000, maxPulseWidth, a_minPulseWidth);
     if (direction == current_direction) {
         if (pulseWidth < targetPulseWidth) {
             pulseWidth = min(pulseWidth + acceleration, targetPulseWidth);
@@ -93,7 +106,9 @@ void stepper::step(const int direction, const float speed, const int a_minPulseW
     digitalWrite(stepXPin, HIGH);
     delayMicroseconds(pulseWidth);
     digitalWrite(stepXPin, LOW);
-    // delayMicroseconds(pulseWidth);
+    if (do_delay_at_end)
+        delayMicroseconds(pulseWidth);
+    counter++;
 }
 
 
@@ -104,4 +119,5 @@ void stepper::set_target(int input_int) {
     move_start_time_ms = millis();
     arrived_counter = 0;
     counter = 0;
+    pid_loop_counter = 0;
 }

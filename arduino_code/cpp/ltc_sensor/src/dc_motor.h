@@ -11,7 +11,7 @@ class DcMotor {
 public:
     DcMotor(int enca, int encb, int pwm, int in1, int in2);
 
-    void resetPosition();
+    static void resetPosition();
     void setup();
     int getPosition();
     bool loop();

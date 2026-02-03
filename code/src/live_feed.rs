@@ -268,9 +268,9 @@ impl eframe::App for App {
                         x as u32,
                         y as u32,
                         image::Rgba([
-                            (r.max(0) as u8).min(255),
-                            (g.max(0) as u8).min(255),
-                            (b.max(0) as u8).min(255),
+                            r.max(0) as u8,
+                            g.max(0) as u8,
+                            b.max(0) as u8,
                             255,
                         ]),
                     );
@@ -419,8 +419,8 @@ impl eframe::App for App {
                     let height = image.height() as usize;
                     // write image to file
                     let mut image_buffer = ImageBuffer::new(width as u32, height as u32);
-                    for x in 0..width as usize {
-                        for y in 0..height as usize {
+                    for x in 0..width {
+                        for y in 0..height {
                             let pixel = image.get_pixel(x as u32, y as u32);
                             image_buffer.put_pixel(
                                 x as u32,
@@ -461,7 +461,7 @@ impl eframe::App for App {
                 // ui.label("Speed:");
                 // ui.add(egui::Slider::new(&mut self.speed, 0..=1000));
                 if ui
-                    .button(format!("{}", if self.paused { "Play" } else { "Pause" }))
+                    .button((if self.paused { "Play" } else { "Pause" }).to_string())
                     .clicked()
                     || ui.input(|ui| ui.key_pressed(egui::Key::Space))
                 {
@@ -475,10 +475,7 @@ impl eframe::App for App {
                         .unwrap();
                 }
                 if ui
-                    .button(format!(
-                        "{}",
-                        if self.recording { "Stop" } else { "Record" }
-                    ))
+                    .button((if self.recording { "Stop" } else { "Record" }).to_string())
                     .clicked()
                     || ui.input(|ui| ui.key_pressed(egui::Key::R))
                 {
@@ -502,7 +499,7 @@ impl eframe::App for App {
                             let mut image_buffer = ImageBuffer::new(width, height);
                             for x in 0..width as usize {
                                 for y in 0..height as usize {
-                                    let pixel = image.pixels[y * width as usize + x].clone();
+                                    let pixel = image.pixels[y * width as usize + x];
                                     image_buffer.put_pixel(
                                         x as u32,
                                         y as u32,
@@ -567,10 +564,10 @@ impl eframe::App for App {
 
                 // color stuff
                 egui::ComboBox::from_label("Selection")
-                    .selected_text(format!("{}", match self.selection {
+                    .selected_text((match self.selection {
                         Selection::Separation => "Separation",
                         Selection::Addition => "Addition",
-                    }))
+                    }).to_string())
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.selection, Selection::Separation, "Separation");
                         ui.selectable_value(&mut self.selection, Selection::Addition, "Addition");
@@ -658,7 +655,7 @@ impl eframe::App for App {
                 }
                 if matches!(self.mode, Mode::PlayerCalibration) {
                     ui.label("Click on Player!");
-                    if self.player_calibration_message.len() > 0 {
+                    if !self.player_calibration_message.is_empty() {
                         ui.label(&self.player_calibration_message);
                     }
                     if ui.button("Next").clicked() || ui.input(|ui| ui.key_pressed(egui::Key::S)) {
@@ -823,7 +820,7 @@ pub fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String)
     // Some vendors may define `Gain` node as `IInteger`, in that case, use
     // `as_integer(&params_ctxt)` instead of `as_float(&params_ctxt).
     let exposure = params_ctxt
-        .node(&*name)
+        .node(&name)
         .unwrap()
         .as_enumeration(&params_ctxt)
         .unwrap();
@@ -831,10 +828,10 @@ pub fn get_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String)
 
     // Get the current value of `Gain`.
     if exposure.is_readable(&mut params_ctxt).unwrap() {
-        let value = exposure.entries(&mut params_ctxt);
+        let value = exposure.entries(&params_ctxt);
         println!("{name}: {:?}", value);
         for value in value {
-            let value_value = value.value(&params_ctxt).clone();
+            let value_value = value.value(&params_ctxt);
             let name = value.as_node().name(&params_ctxt);
 
             println!("{}: {:?}", name, value_value);
@@ -848,7 +845,7 @@ pub fn subtract_image(original: &mut [u8], other: &[u8]) {
     assert_eq!(original.len(), other.len());
     for i in 0..original.len() {
         // todo avoid casting
-        original[i] = (original[i] as i32 - other[i] as i32).max(0).min(255) as u8;
+        original[i] = (original[i] as i32 - other[i] as i32).clamp(0, 255) as u8;
         // assert!(original[i] <= 255);
         // assert!(original[i] >= 0);
     }

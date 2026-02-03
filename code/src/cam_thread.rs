@@ -1,6 +1,6 @@
 use crate::arduino_com::ArduinoCom;
 use crate::ball::{standard_selection, BallComp};
-use crate::image_utils::{gpu_debayer, MetalContext};
+use crate::image_utils::MetalContext;
 use crate::live_feed::Command::*;
 use crate::live_feed::{
     subtract_image, Command, Selection, FOLLOWBALL, FPS, IMAGE_BUFFER, IMAGE_BUFFER_UNDISTORTED,
@@ -26,7 +26,7 @@ pub fn set_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String,
     // Some vendors may define `Gain` node as `IInteger`, in that case, use
     // `as_integer(&params_ctxt)` instead of `as_float(&params_ctxt).
     let exposure = params_ctxt
-        .node(&*name)
+        .node(&name)
         .unwrap()
         .as_float(&params_ctxt)
         .unwrap();
@@ -55,7 +55,7 @@ pub fn set_value(camera: &mut Camera<ControlHandle, StreamHandle>, name: String,
 pub fn set_value_i64(camera: &mut Camera<ControlHandle, StreamHandle>, name: String, value: i64) {
     let mut params_ctxt = camera.params_ctxt().unwrap();
     let exposure = params_ctxt
-        .node(&*name)
+        .node(&name)
         .unwrap()
         .as_integer(&params_ctxt)
         .unwrap();
@@ -117,7 +117,7 @@ pub fn execute_command(camera: &mut Camera<ControlHandle, StreamHandle>, name: &
 
 pub fn print_all_options(camera: &mut Camera<ControlHandle, StreamHandle>) {
     let mut options_file = std::fs::File::create("camera_options.txt").unwrap();
-    let mut params_ctxt = camera.params_ctxt().unwrap();
+    let params_ctxt = camera.params_ctxt().unwrap();
     params_ctxt.node_store().visit_nodes(|node| {
         // Print debug info for each node (most implementations include the node name)
         // println!("{:?}", node);
@@ -233,6 +233,12 @@ pub const MAX_Y: i32 = HEIGHT as i32 + BOTTOM_MARGIN;
 pub const NEW_WIDTH: u32 = (MAX_X - MIN_X) as u32;
 pub const NEW_HEIGHT: u32 = (MAX_Y - MIN_Y) as u32;
 
+impl Default for CamThread {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CamThread {
     pub fn new() -> Self {
         Self { player_x_coord: 44 }
@@ -299,8 +305,7 @@ impl CamThread {
                 .as_raw()
                 .to_vec()
                 .chunks(4)
-                .map(|x| x[0..3].to_vec())
-                .flatten()
+                .flat_map(|x| x[0..3].to_vec())
                 .collect::<Vec<u8>>();
             let mut raw_image = raw_image.as_slice();
             let mut raw_image_owned_boxed_slice: Box<[u8]>; // Declared in outer scope to ensure longevity.
@@ -372,10 +377,7 @@ impl CamThread {
                     // first convert y to f64, because the polynomial fit is done with f64 and it needs to be very precise
                     let y = y as f64;
                     // cnc shield:
-                    let x = -0.0000609070 * y.powi(3)
-                        + 0.0577279513 * y.powi(2)
-                        + -11.0721181144 * y.powi(1)
-                        + 242.7078559049;
+                    let x = 6.9614677445 * y + -1552.5711206213;
                     // rs485:
                     // let x = 0.0001587715 * y.powi(3) + -0.1268654294 * y.powi(2) + 30.4151445206 * y.powi(1) + -1892.1674459350;
 
@@ -384,7 +386,7 @@ impl CamThread {
                     let paused_player = PAUSEPLAYER.load(Ordering::Relaxed);
                     if !paused_player {
                         // println!("in sending: y: {x}");
-                        arduino_com.send_string(&format!("{}", x as i32));
+                        arduino_com.send_string(&format!("{}", { x }));
                         *last_command = Instant::now();
                     }
                 }
@@ -441,8 +443,7 @@ impl CamThread {
                                 .as_raw()
                                 .to_vec()
                                 .chunks(4)
-                                .map(|x| x[0..3].to_vec())
-                                .flatten()
+                                .flat_map(|x| x[0..3].to_vec())
                                 .collect::<Vec<u8>>()
                                 .into_boxed_slice();
                             raw_image = &raw_image_owned_boxed_slice;
@@ -523,11 +524,6 @@ impl CamThread {
                         } => {
                             selection_fn = match selection_type {
                                 Selection::Separation => {
-                                    // inputs for r g b
-                                    let r = r; // Clone current values of self.r, self.g, self.b
-                                    let g = g;
-                                    let b = b;
-
                                     // Create a closure with `'static` lifetime
                                     Box::new(move |r_in, g_in, b_in| {
                                         r_in > r && g_in > g && b_in > b
@@ -575,7 +571,7 @@ impl CamThread {
                 }
                 // let fps = 1.0 / delta.as_secs_f64()
                 let fps = delta.as_secs_f64();
-                last_fps[(frame_counter % last_fps.len()) as usize] = fps;
+                last_fps[frame_counter % last_fps.len()] = fps;
                 *FPS.lock().unwrap() = last_fps.iter().sum::<f64>() / last_fps.len() as f64;
                 let payload = match payload_rx.recv_blocking() {
                     Ok(payload) => payload,
@@ -602,8 +598,8 @@ impl CamThread {
                     if let Some(image_rg12) = image {
                         let image = &metal_context.debayer(
                             image_rg12,
-                            image_info.width as usize,
-                            image_info.height as usize,
+                            image_info.width,
+                            image_info.height,
                             true,
                         );
                         crate::undistort_image_table(
@@ -626,8 +622,8 @@ impl CamThread {
                         // std::process::exit(0);
                         let ball = crate::ball::find_ball(
                             undistorted_image.as_slice(),
-                            NEW_WIDTH as u32,
-                            NEW_HEIGHT as u32,
+                            NEW_WIDTH,
+                            NEW_HEIGHT,
                             &mut ball_comp,
                             elapsed.as_secs_f32(),
                             &selection_fn,
@@ -727,17 +723,17 @@ impl CamThread {
                                 max_pixel,
                             );
                         }
-                        if frame_counter % 1 == 0 {
-                            // save to IMAGE_BUFFER
-                            let mut buffer = IMAGE_BUFFER.lock().unwrap();
-                            buffer.clear();
-                            buffer.extend_from_slice(image);
-                            drop(buffer);
+                        // if frame_counter % 1 == 0 {
+                        // save to IMAGE_BUFFER
+                        let mut buffer = IMAGE_BUFFER.lock().unwrap();
+                        buffer.clear();
+                        buffer.extend_from_slice(image);
+                        drop(buffer);
 
-                            let mut buffer = IMAGE_BUFFER_UNDISTORTED.lock().unwrap();
-                            buffer.2.clear();
-                            buffer.2.extend_from_slice(&undistorted_clone);
-                        }
+                        let mut buffer = IMAGE_BUFFER_UNDISTORTED.lock().unwrap();
+                        buffer.2.clear();
+                        buffer.2.extend_from_slice(&undistorted_clone);
+                        // }
                     }
                 }
             }

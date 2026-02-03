@@ -98,38 +98,51 @@ fn main() {
                 //     // pulse_widths.push((t, pw as f64));
                 //     thread::sleep(Duration::from_millis(5));
                 // }
-                let line = com.read_line();
-                // should be t: 400 for 400ms
-                // println!("line: {:?}", line);
-                let time_taken = line
-                    .trim()
-                    .split_whitespace()
-                    .nth(1)
-                    .unwrap()
-                    .parse::<f64>()
-                    .unwrap()
-                    / 1000.0;
-                let counter = line
-                    .trim()
-                    .split_whitespace()
-                    .nth(2)
-                    .unwrap()
-                    .parse::<u32>()
-                    .unwrap();
-                let actual_pos = com.get_pos_sync(true) as i32;
-                actual_positions.push((t00.elapsed().as_secs_f64(), actual_pos as f64));
-                let actual_pos = com.get_pos() as i32;
-                println!(
-                    "sent {}, actual pos: {}, diff: {} in {:.3}s with {} steps, ie. actual avg delay: {:.3}us",
-                    pos,
-                    actual_pos,
-                    actual_pos.abs_diff(*pos),
-                    time_taken,
-                    counter,
-                    time_taken * 1_000_000.0 / counter as f64
-                );
-                total_diff += actual_pos.abs_diff(*pos);
-                total_time += time_taken;
+                if let Some(line) = com.read_line_option() {
+                    // should be t: 400 for 400ms
+                    // println!("line: {:?}", line);
+                    let time_taken = line
+                        .trim()
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap()
+                        .parse::<f64>()
+                        .unwrap()
+                        / 1000.0;
+                    let counter = line
+                        .trim()
+                        .split_whitespace()
+                        .nth(2)
+                        .unwrap()
+                        .parse::<u32>()
+                        .unwrap();
+                    let pid_counter = line
+                        .trim()
+                        .split_whitespace()
+                        .nth(3)
+                        .unwrap()
+                        .parse::<u32>()
+                        .unwrap();
+                    let actual_pos = com.get_pos_sync(true) as i32;
+                    actual_positions.push((t00.elapsed().as_secs_f64(), actual_pos as f64));
+                    let actual_pos = com.get_pos() as i32;
+                    println!(
+                        "sent {}, actual pos: {}, diff: {} in {:.3}s with {} steps, ie. actual avg delay: {:.3}us with {} pid loops, ie. {:.3}us per pid loop",
+                        pos,
+                        actual_pos,
+                        actual_pos.abs_diff(*pos),
+                        time_taken,
+                        counter,
+                        time_taken * 1_000_000.0 / counter as f64,
+                        pid_counter,
+                        time_taken * 1_000_000.0 / pid_counter as f64
+                    );
+
+                    total_diff += actual_pos.abs_diff(*pos);
+                    total_time += time_taken;
+                } else {
+                    println!("No response from Arduino!");
+                }
                 // wait until key pressed
                 // println!("Press Enter to continue...");
                 // let mut input = String::new();

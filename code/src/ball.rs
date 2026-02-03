@@ -68,7 +68,7 @@ pub fn read_image(
     let t1 = std::time::Instant::now();
     let mut counter = 0;
     // debug!("pixels: {}", img.pixels().count());
-    for (_i, pixel) in img.pixels().enumerate() {
+    for pixel in img.pixels() {
         if counter == SCALING - 1 {
             // let pixel = pixels[i];
             // debug!("pixel: {:?}", pixel);
@@ -158,7 +158,7 @@ pub fn read_image(
             .sqrt()
             / 2.0;
         // check that the radius is between 10 and 40
-        if radius < 15.0 || radius > 40.0 {
+        if !(15.0..=40.0).contains(&radius) {
             continue;
         }
         // check that the width and height are about equal to the radius
@@ -232,7 +232,7 @@ pub fn read_image(
         let mut iter = 0;
         let start_x = x;
         let mut x = x as i32;
-        let m = ball_comp.velocity.y as f32 / ball_comp.velocity.x as f32;
+        let m = ball_comp.velocity.y / ball_comp.velocity.x;
         // println!(
         //     "m: {}, vel: {}, {}",
         //     m, ball_comp.velocity.x, ball_comp.velocity.y
@@ -409,7 +409,7 @@ pub fn find_ball(
         balls.push(Ball {
             x: x * SCALING,
             y: y * SCALING,
-            radius: radius as f32 * SCALING as f32,
+            radius: radius * SCALING as f32,
         });
         // }
     }
@@ -549,7 +549,7 @@ pub fn read_image_vis(
     let mut iter = 0;
     let start_x = x;
     let mut x = x as i32;
-    let m = ball_comp.velocity.y as f32 / ball_comp.velocity.x as f32;
+    let m = ball_comp.velocity.y / ball_comp.velocity.x;
     // println!(
     //     "m: {}, vel: {}, {}",
     //     m, ball_comp.velocity.x, ball_comp.velocity.y
@@ -601,8 +601,8 @@ pub fn compute_velocity(positions: &Vec<(Vector2<f32>, f32)>) -> Vector2<f32> {
     }
 
     // Compute the velocity using linear regression formula: v = (n * Σxy - Σx * Σy) / (n * Σyy - Σy^2)
-    let velocity = (n * sum_xy - sum_x * sum_y) / (n * sum_yy - sum_y * sum_y);
-    velocity
+    
+    (n * sum_xy - sum_x * sum_y) / (n * sum_yy - sum_y * sum_y)
 }
 
 #[derive(Debug, Clone)]

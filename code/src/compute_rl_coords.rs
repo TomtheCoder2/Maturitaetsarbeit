@@ -7,6 +7,12 @@ pub struct RLCompute {
     homography_matrix: Matrix3<f32>,
 }
 
+impl Default for RLCompute {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RLCompute {
     pub fn new() -> Self {
         RLCompute::new_f("./python_code_ma/homography_matrix.csv")

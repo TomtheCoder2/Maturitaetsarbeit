@@ -1,5 +1,5 @@
 use matura::cam_thread::*;
-use matura::image_utils::{gpu_debayer, MetalContext};
+use matura::image_utils::MetalContext;
 
 fn main() {
     // construct the camera
@@ -67,10 +67,7 @@ fn main() {
             );
             compute_times.push(local_t0.elapsed().as_secs_f64());
             // save to file
-            let filename = format!(
-                "./output/camera_test_frame_{}.png",
-                frame_count
-            );
+            let filename = format!("./output/camera_test_frame_{}.png", frame_count);
             matura::image_utils::save_rgb8_image(
                 &filename,
                 &image_rgb8,

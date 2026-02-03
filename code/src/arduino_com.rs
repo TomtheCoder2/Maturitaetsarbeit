@@ -48,11 +48,11 @@ impl ArduinoCom {
             flow_control: FlowControl::None, // Keep this as None
             parity: Parity::None,
             stop_bits: StopBits::One,
-            timeout: Duration::from_millis(500), // Keep this generous
+            timeout: Duration::from_millis(1000), // Keep this generous
         };
 
         let port = serialport::open_with_settings(&port_name, &serial_settings)
-            .expect(&format!("Failed to open port: {}", port_name));
+            .unwrap_or_else(|_| panic!("Failed to open port: {}", port_name));
 
         let arduino_com = ArduinoCom {
             serial: port,

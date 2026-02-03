@@ -16,7 +16,7 @@ pub struct MetalContext {
     device: Arc<Device>,
     command_queue: Arc<CommandQueue>,
     pipeline: Arc<ComputePipelineState>,
-    library: Arc<Library>,
+    _library: Arc<Library>,
 }
 
 impl MetalContext {
@@ -33,7 +33,7 @@ impl MetalContext {
         let library = Arc::new(library);
 
         let desc = FunctionDescriptor::new();
-            desc.set_name("debayer_kernel");
+        desc.set_name("debayer_kernel");
         let function = library.new_function_with_descriptor(&desc)?;
 
         let pipeline_descriptor = ComputePipelineDescriptor::new();
@@ -45,7 +45,7 @@ impl MetalContext {
             device,
             command_queue,
             pipeline,
-            library,
+            _library: library,
         })
     }
 
@@ -78,8 +78,8 @@ impl MetalContext {
                         ((b0 << 4) | (b1 >> 4), ((b1 & 0x0F) << 8) | b2)
                     };
                     let idx1 = y * width + x;
-                    bayer_u16[idx1] = pix1.min(4095) as u16;
-                    bayer_u16[idx1 + 1] = pix2.min(4095) as u16;
+                    bayer_u16[idx1] = pix1.min(4095);
+                    bayer_u16[idx1 + 1] = pix2.min(4095);
                     byte_idx += 3;
                 }
             }
@@ -89,22 +89,18 @@ impl MetalContext {
             let rgb_length = (num_pixels * 3) as u64;
 
             // Step 3: Zero-copy buffers (reuse context, recreate for size)
-            let bayer_buffer = unsafe {
-                self.device.new_buffer_with_bytes_no_copy(
-                    bayer_u16.as_ptr() as *const c_void,
-                    bayer_length,
-                    MTLResourceOptions::StorageModeShared,
-                    None,  // No dealloc
-                )
-            };
-            let rgb_buffer = unsafe {
-                self.device.new_buffer_with_bytes_no_copy(
-                    rgb_u8.as_mut_ptr() as *mut c_void,
-                    rgb_length,
-                    MTLResourceOptions::StorageModeShared,
-                    None,
-                )
-            };
+            let bayer_buffer = self.device.new_buffer_with_bytes_no_copy(
+                bayer_u16.as_ptr() as *const c_void,
+                bayer_length,
+                MTLResourceOptions::StorageModeShared,
+                None, // No dealloc
+            );
+            let rgb_buffer = self.device.new_buffer_with_bytes_no_copy(
+                rgb_u8.as_mut_ptr() as *mut c_void,
+                rgb_length,
+                MTLResourceOptions::StorageModeShared,
+                None,
+            );
 
             // Globals buffer (recreate for dims)
             let globals_data = Globals {
@@ -113,7 +109,7 @@ impl MetalContext {
             };
             let globals_buffer = self.device.new_buffer_with_data(
                 &globals_data as *const _ as *const c_void,
-                mem::size_of::<Globals>() as u64,
+                size_of::<Globals>() as u64,
                 MTLResourceOptions::StorageModeShared,
             );
 
@@ -127,9 +123,10 @@ impl MetalContext {
             encoder.set_buffer(2, Some(&globals_buffer), 0);
 
             let threadgroup = MTLSize::new(16, 16, 1);
-            let num_groups_x = ((width as u64 + 15) / 16) as u64;
-            let num_groups_y = ((height as u64 + 15) / 16) as u64;
-            let threadgroups = MTLSize::new(num_groups_x as NSUInteger, num_groups_y as NSUInteger, 1);
+            let num_groups_x = (width as u64).div_ceil(16);
+            let num_groups_y = (height as u64).div_ceil(16);
+            let threadgroups =
+                MTLSize::new(num_groups_x as NSUInteger, num_groups_y as NSUInteger, 1);
             encoder.dispatch_thread_groups(threadgroups, threadgroup);
 
             encoder.end_encoding();
@@ -146,20 +143,10 @@ pub fn gpu_debayer(raw_data: &[u8], width: usize, height: usize, reverse_bits: b
     let context = MetalContext::new().expect("Metal init failed");
     context.debayer(raw_data, width, height, reverse_bits)
 }
-pub fn save_rgb8_image(
-    p0: &String,
-    p1: &Vec<u8>,
-    p2: usize,
-    p3: usize,
-) -> Result<(), std::io::Error> {
+pub fn save_rgb8_image(p0: &String, p1: &[u8], p2: usize, p3: usize) -> Result<(), std::io::Error> {
     use image::{ImageBuffer, Rgb};
-    let img_buffer: ImageBuffer<Rgb<u8>, _> =
-        ImageBuffer::from_raw(p2 as u32, p3 as u32, p1.clone()).ok_or(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to create image buffer",
-        ))?;
-    img_buffer
-        .save(p0)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let img_buffer: ImageBuffer<Rgb<u8>, _> = ImageBuffer::from_raw(p2 as u32, p3 as u32, p1)
+        .ok_or(std::io::Error::other("Failed to create image buffer"))?;
+    img_buffer.save(p0).map_err(std::io::Error::other)?;
     Ok(())
 }

@@ -65,6 +65,12 @@ void loop() {
             dc_motor.target = input_int;
             return;
         }
+        // reset_dc
+        if (input == "reset_dc") {
+            DcMotor::resetPosition();
+            // Serial.println("Reset dc motor position to 0");
+            return;
+        }
         // pid set:
         // eg. pid 4 3 2
         if (input.startsWith("pid")) {
